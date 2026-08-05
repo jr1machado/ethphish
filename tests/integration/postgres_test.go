@@ -1,14 +1,19 @@
 package integration
 
 import (
+	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gophish/gophish/config"
+	"github.com/gophish/gophish/migration"
 	"github.com/gophish/gophish/models"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const postgresDSNEnv = "ETHPHISH_TEST_POSTGRES_DSN"
@@ -178,5 +183,63 @@ func TestPostgresSMSCampaignPersistence(t *testing.T) {
 	}
 	if len(logs) != 1 {
 		t.Fatalf("SMS log count = %d, want 1", len(logs))
+	}
+}
+
+// TestPostgresSQLiteImport validates the approved migration path against an
+// empty, schema-only PostgreSQL database. It contains synthetic data only.
+func TestPostgresSQLiteImport(t *testing.T) {
+	dsn := os.Getenv(postgresDSNEnv)
+	if dsn == "" {
+		t.Skipf("set %s to run PostgreSQL integration tests", postgresDSNEnv)
+	}
+	adminDSN := strings.Replace(dsn, "dbname=ethphish", "dbname=postgres", 1)
+	importDSN := strings.Replace(dsn, "dbname=ethphish", "dbname=ethphish_import_test", 1)
+	admin, err := sql.Open("postgres", adminDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admin.Close()
+	if _, err := admin.Exec(`DROP DATABASE IF EXISTS ethphish_import_test WITH (FORCE); CREATE DATABASE ethphish_import_test`); err != nil {
+		t.Fatalf("creating isolated import database: %v", err)
+	}
+	target, err := sql.Open("postgres", importDSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer target.Close()
+	_, sourceFile, _, _ := runtime.Caller(0)
+	migrationsPath := filepath.Join(filepath.Dir(sourceFile), "..", "..", "db", "db_postgres", "migrations")
+	latest, err := migration.Latest(migrationsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migration.Apply(context.Background(), "postgres", migrationsPath, latest, target); err != nil {
+		t.Fatalf("preparing schema-only destination: %v", err)
+	}
+	sourcePath := filepath.Join(t.TempDir(), "legacy.db")
+	source, err := sql.Open("sqlite3", sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.Exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT NOT NULL, hash TEXT, api_key TEXT NOT NULL); INSERT INTO users VALUES (7, 'legacy-admin', 'synthetic-hash', 'synthetic-api-key')`); err != nil {
+		t.Fatal(err)
+	}
+	source.Close()
+	readonly, err := migration.OpenSQLiteReadOnly(sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readonly.Close()
+	report, err := migration.Import(context.Background(), readonly, target)
+	if err != nil {
+		t.Fatalf("importing synthetic SQLite data: %v", err)
+	}
+	if !report.Reconciled {
+		t.Fatalf("import report is not reconciled: %#v", report.Tables)
+	}
+	var username string
+	if err := target.QueryRow(`SELECT username FROM users WHERE id = 7`).Scan(&username); err != nil || username != "legacy-admin" {
+		t.Fatalf("validating imported user: username=%q err=%v", username, err)
 	}
 }
