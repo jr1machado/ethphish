@@ -82,7 +82,6 @@ func TestLoadConfigEnvironmentOverrides(t *testing.T) {
 	t.Setenv("ETHPHISH_ADMIN_LISTEN_URL", "0.0.0.0:3333")
 	t.Setenv("ETHPHISH_ADMIN_USE_TLS", "false")
 	t.Setenv("ETHPHISH_PHISH_LISTEN_URL", "0.0.0.0:8080")
-	t.Setenv("ETHPHISH_ADMIN_TRUSTED_ORIGINS", "admin.example.test, portal.example.test")
 	t.Setenv("ETHPHISH_REPORTS_STORAGE_PATH", "/var/lib/ethphish/reports")
 	t.Setenv("ETHPHISH_DB_DRIVER", "postgres")
 	t.Setenv("ETHPHISH_DB_DSN", "host=postgres dbname=ethphish sslmode=disable")
@@ -104,9 +103,6 @@ func TestLoadConfigEnvironmentOverrides(t *testing.T) {
 	}
 	if conf.PhishConf.ListenURL != "0.0.0.0:8080" {
 		t.Fatalf("phish environment override not applied: %s", conf.PhishConf.ListenURL)
-	}
-	if !reflect.DeepEqual(conf.AdminConf.TrustedOrigins, []string{"admin.example.test", "portal.example.test"}) {
-		t.Fatalf("trusted origins not parsed: %#v", conf.AdminConf.TrustedOrigins)
 	}
 	if conf.ReportsConf.StoragePath != "/var/lib/ethphish/reports" {
 		t.Fatalf("reports path not overridden: %s", conf.ReportsConf.StoragePath)

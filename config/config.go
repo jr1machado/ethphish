@@ -20,7 +20,6 @@ type AdminServer struct {
 	KeyPath              string   `json:"key_path"`
 	CSRFKey              string   `json:"csrf_key"`
 	AllowedInternalHosts []string `json:"allowed_internal_hosts"`
-	TrustedOrigins       []string `json:"trusted_origins"`
 }
 
 // PhishServer represents the Phish server configuration details
@@ -184,9 +183,6 @@ func applyEnvironment(config *Config) error {
 	}
 	if err := setBool("ETHPHISH_DB_REQUIRE_TLS", &config.DBRequireTLS); err != nil {
 		return err
-	}
-	if value, ok := os.LookupEnv("ETHPHISH_ADMIN_TRUSTED_ORIGINS"); ok {
-		config.AdminConf.TrustedOrigins = splitList(value)
 	}
 	if value, ok := os.LookupEnv("ETHPHISH_ALLOWED_INTERNAL_HOSTS"); ok {
 		config.AdminConf.AllowedInternalHosts = splitList(value)

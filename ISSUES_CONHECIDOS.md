@@ -10,6 +10,7 @@
 | SQLite segue no código/testes | CGO ainda é requerido em parte da suíte | remover do runtime somente após paridade PostgreSQL |
 | GORM v1 e frontend legado | dependências com manutenção limitada | modernização incremental após estabilização funcional |
 | Certificados autoassinados | adequados apenas para desenvolvimento | usar CA corporativa ou certificados públicos gerenciados em produção |
+| Origens confiáveis customizadas no CSRF | não são suportadas nesta release por vulnerabilidade sem correção do componente upstream | usar um único origin administrativo HTTPS; reavaliar após correção upstream |
 | Restore automatizado não existe | recuperação requer runbook e operador autorizado | automatizar retenção, restore periódico e evidência de teste |
 | Dependências legadas fora do escopo do scanner | componentes herdados como GORM v1 exigem acompanhamento contínuo | CI bloqueia CVEs HIGH/CRITICAL corrigíveis em cada alteração de imagem |
 

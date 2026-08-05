@@ -215,8 +215,7 @@ func (as *AdminServer) registerRoutes() {
 	}
 	csrfHandler := csrf.Protect(csrfKey,
 		csrf.FieldName("csrf_token"),
-		csrf.Secure(as.config.UseTLS),
-		csrf.TrustedOrigins(as.config.TrustedOrigins))
+		csrf.Secure(as.config.UseTLS))
 	csrfProtectedHandler := csrfHandler(router)
 	adminHandler := csrfProtectedHandler
 	if !as.config.UseTLS {
