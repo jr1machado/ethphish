@@ -131,6 +131,10 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
 - Node 22 para reconstrução de assets;
 - PostgreSQL 17 para o ambiente Compose.
 
+O runtime de produção exige PostgreSQL. SQLite permanece somente para testes e
+migração legada explicitamente controlada; não inicie uma imagem de produção
+com `ETHPHISH_DB_DRIVER=sqlite3`.
+
 Referência de capacidade inicial: servidor central com 2 vCPU, 4 GB RAM e
 100 GB de disco; cada worker futuro com 1 vCPU, 1 GB RAM e 50 GB de disco. A
 capacidade real deve ser dimensionada por volume, taxa de entrega aprovada,
@@ -164,6 +168,7 @@ Consulte [desenvolvimento local](docs/runbooks/local-development.md),
 - [Threat model](docs/security/threat-model.md)
 - [Uso aceitável](docs/product/acceptable-use.md)
 - [Status das Sprints 0–2](docs/project/sprint-0-2-status.md)
+- [Sprint 02 — endurecimento PostgreSQL](docs/project/sprint-02.md)
 - [Release notes v0.1.0](RELEASE_NOTES.md)
 - [Issues conhecidos](ISSUES_CONHECIDOS.md)
 

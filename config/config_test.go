@@ -143,6 +143,18 @@ func TestLoadConfigRejectsInvalidBooleanEnvironment(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRejectsSQLiteInProductionRuntime(t *testing.T) {
+	t.Setenv("ETHPHISH_RUNTIME_ENV", "production")
+	f := createTemporaryConfig(t)
+	defer removeTemporaryConfig(t, f)
+	if _, err := f.Write(validConfig); err != nil {
+		t.Fatalf("error writing config: %v", err)
+	}
+	if _, err := LoadConfig(f.Name()); err == nil {
+		t.Fatal("expected SQLite configuration to be rejected in production")
+	}
+}
+
 func TestLoadConfigRejectsInvalidDatabasePoolEnvironment(t *testing.T) {
 	t.Setenv("ETHPHISH_DB_MAX_OPEN_CONNECTIONS", "not-a-number")
 	f := createTemporaryConfig(t)

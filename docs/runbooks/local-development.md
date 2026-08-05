@@ -47,6 +47,11 @@ PostgreSQL e RabbitMQ são provisionados como fundação das próximas sprints, 
 o servidor usa PostgreSQL no Compose desde a Sprint 2. Nenhuma entrega externa
 deve ser configurada neste ambiente.
 
+As imagens de runtime definem `ETHPHISH_RUNTIME_ENV=production` e recusam
+SQLite. Para executar uma migração legada local, use uma ferramenta de migração
+em ambiente isolado; não altere esse ambiente na imagem ou no deploy de
+produção.
+
 Em ambientes fora do desenvolvimento, use um DSN PostgreSQL com TLS e defina
 `ETHPHISH_DB_REQUIRE_TLS=true`. Com essa opção, a aplicação se recusa a iniciar
 se o DSN usar `sslmode=disable`.
