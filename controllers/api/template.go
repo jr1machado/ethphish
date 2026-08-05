@@ -66,7 +66,7 @@ func (as *Server) Templates(w http.ResponseWriter, r *http.Request) {
 		t.ModifiedDate = time.Now().UTC()
 		t.UserId = userID
 		t.TenantID = scope.TenantID
-		err = models.PostTemplate(&t)
+		err = models.PostTemplateForTenant(&t, scope.TenantID)
 		if err == models.ErrTemplateNameNotSpecified {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusBadRequest)
 			return

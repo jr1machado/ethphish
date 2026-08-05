@@ -53,6 +53,13 @@ Validado no mesmo banco isolado:
 Resultado do teste: `PASS`. A mensagem `record not found` no log foi a
 verificação negativa esperada para o template de outro tenant.
 
+## Preparação transacional para RLS
+
+O fluxo tenant-scoped de templates passou a abrir uma transação por operação e
+executar `set_config('ethphish.tenant_id', ..., true)` em PostgreSQL. O escopo
+é local à transação, portanto não persiste em uma conexão reutilizada pelo pool.
+O teste isolado foi repetido após essa alteração com resultado `PASS`.
+
 ## Limite atual
 
 O middleware de tenant é aplicado à API e o fluxo de templates já consome o

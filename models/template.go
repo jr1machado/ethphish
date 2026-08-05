@@ -84,20 +84,24 @@ func GetTemplates(uid int64) ([]Template, error) {
 // function instead of the legacy user-only lookup.
 func GetTemplatesForTenant(tenantID, uid int64) ([]Template, error) {
 	ts := []Template{}
-	err := db.Where("tenant_id=? AND user_id=?", tenantID, uid).Find(&ts).Error
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND user_id=?", tenantID, uid).Find(&ts).Error; err != nil {
+			return err
+		}
+		for i := range ts {
+			err := tx.Where("template_id=?", ts[i].Id).Find(&ts[i].Attachments).Error
+			if err == nil && len(ts[i].Attachments) == 0 {
+				ts[i].Attachments = make([]Attachment, 0)
+			}
+			if err != nil && err != gorm.ErrRecordNotFound {
+				return err
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		log.Error(err)
 		return ts, err
-	}
-	for i := range ts {
-		err = db.Where("template_id=?", ts[i].Id).Find(&ts[i].Attachments).Error
-		if err == nil && len(ts[i].Attachments) == 0 {
-			ts[i].Attachments = make([]Attachment, 0)
-		}
-		if err != nil && err != gorm.ErrRecordNotFound {
-			log.Error(err)
-			return ts, err
-		}
 	}
 	return ts, err
 }
@@ -126,18 +130,21 @@ func GetTemplate(id int64, uid int64) (Template, error) {
 // GetTemplateForTenant returns a template only from the selected tenant.
 func GetTemplateForTenant(id, tenantID, uid int64) (Template, error) {
 	t := Template{}
-	err := db.Where("tenant_id=? AND user_id=? AND id=?", tenantID, uid, id).Find(&t).Error
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND user_id=? AND id=?", tenantID, uid, id).Find(&t).Error; err != nil {
+			return err
+		}
+		err := tx.Where("template_id=?", t.Id).Find(&t.Attachments).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+		if err == nil && len(t.Attachments) == 0 {
+			t.Attachments = make([]Attachment, 0)
+		}
+		return nil
+	})
 	if err != nil {
 		log.Error(err)
-		return t, err
-	}
-	err = db.Where("template_id=?", t.Id).Find(&t.Attachments).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
-		log.Error(err)
-		return t, err
-	}
-	if err == nil && len(t.Attachments) == 0 {
-		t.Attachments = make([]Attachment, 0)
 	}
 	return t, err
 }
@@ -167,18 +174,21 @@ func GetTemplateByName(n string, uid int64) (Template, error) {
 // information across tenants.
 func GetTemplateByNameForTenant(n string, tenantID, uid int64) (Template, error) {
 	t := Template{}
-	err := db.Where("tenant_id=? AND user_id=? AND name=?", tenantID, uid, n).Find(&t).Error
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND user_id=? AND name=?", tenantID, uid, n).Find(&t).Error; err != nil {
+			return err
+		}
+		err := tx.Where("template_id=?", t.Id).Find(&t.Attachments).Error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+		if err == nil && len(t.Attachments) == 0 {
+			t.Attachments = make([]Attachment, 0)
+		}
+		return nil
+	})
 	if err != nil {
 		log.Error(err)
-		return t, err
-	}
-	err = db.Where("template_id=?", t.Id).Find(&t.Attachments).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
-		log.Error(err)
-		return t, err
-	}
-	if err == nil && len(t.Attachments) == 0 {
-		t.Attachments = make([]Attachment, 0)
 	}
 	return t, err
 }
@@ -205,6 +215,27 @@ func PostTemplate(t *Template) error {
 		}
 	}
 	return nil
+}
+
+// PostTemplateForTenant persists a template inside a tenant-bound
+// transaction, ready for PostgreSQL RLS enforcement.
+func PostTemplateForTenant(t *Template, tenantID int64) error {
+	if err := t.Validate(); err != nil {
+		return err
+	}
+	t.TenantID = tenantID
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Save(t).Error; err != nil {
+			return err
+		}
+		for i := range t.Attachments {
+			t.Attachments[i].TemplateId = t.Id
+			if err := tx.Save(&t.Attachments[i]).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // PutTemplate edits an existing template in the database.
@@ -244,12 +275,27 @@ func PutTemplate(t *Template) error {
 // tenant before updating it. PostgreSQL RLS will provide the database-level
 // backstop in the following Sprint 04 increment.
 func PutTemplateForTenant(t *Template, tenantID, uid int64) error {
-	if _, err := GetTemplateForTenant(t.Id, tenantID, uid); err != nil {
+	if err := t.Validate(); err != nil {
 		return err
 	}
 	t.TenantID = tenantID
 	t.UserId = uid
-	return PutTemplate(t)
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		var existing Template
+		if err := tx.Where("id=? AND tenant_id=? AND user_id=?", t.Id, tenantID, uid).First(&existing).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("template_id=?", t.Id).Delete(&Attachment{}).Error; err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+		for i := range t.Attachments {
+			t.Attachments[i].TemplateId = t.Id
+			if err := tx.Save(&t.Attachments[i]).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", t.Id, tenantID, uid).Save(t).Error
+	})
 }
 
 // DeleteTemplate deletes an existing template in the database.
@@ -273,7 +319,9 @@ func DeleteTemplate(id int64, uid int64) error {
 
 // DeleteTemplateForTenant removes a template only from the selected tenant.
 func DeleteTemplateForTenant(id, tenantID, uid int64) error {
-	return db.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).Delete(&Template{}).Error
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).Delete(&Template{}).Error
+	})
 }
 
 // DeleteTemplates deletes multiple templates in the database.
@@ -318,5 +366,7 @@ func DeleteTemplates(ids []int64, uid int64) error {
 // DeleteTemplatesForTenant is the bulk-delete equivalent scoped to one
 // tenant. It intentionally does not report whether IDs existed elsewhere.
 func DeleteTemplatesForTenant(ids []int64, tenantID, uid int64) error {
-	return db.Where("id IN (?) AND tenant_id=? AND user_id=?", ids, tenantID, uid).Delete(&Template{}).Error
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id IN (?) AND tenant_id=? AND user_id=?", ids, tenantID, uid).Delete(&Template{}).Error
+	})
 }
