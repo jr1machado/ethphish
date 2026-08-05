@@ -23,12 +23,14 @@ executadas em ambiente isolado e autorizado.
 - `sqlite-postgres-preflight`, ferramenta somente leitura para inventariar a
   origem SQLite, comparar contagens com o destino PostgreSQL e impedir a cópia
   quando o destino já contém dados de negócio.
+- teste de integração PostgreSQL para persistência de grupo, template, página,
+  perfil SMTP, campanha, resultado e log, sem envio externo.
 
 ## Próximos itens
 
 - cópia controlada SQLite → PostgreSQL, executada somente após o preflight e
   com relatório de reconciliação pós-cópia;
-- testes de paridade dos fluxos críticos em PostgreSQL;
+- ampliar a paridade PostgreSQL para SMS, webhooks e relatórios;
 - remover o driver SQLite da imagem de produção após a ferramenta de migração
   e a paridade serem aprovadas;
 - ensaio de restore PostgreSQL com evidência anexada ao processo de release.
