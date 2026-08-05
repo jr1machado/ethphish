@@ -77,8 +77,10 @@ um grupo com alvo criado no tenant A não foi retornado pela listagem do tenant
 B. Resultado: `PASS`.
 
 As operações de detalhe, edição, bloqueio e exclusão de grupos permanecem no
-próximo incremento; elas ainda não devem ser consideradas fluxo multitenant
-concluído.
+quarto incremento. Elas agora exigem `TenantScope`; a busca, resumo, edição,
+bloqueio e exclusão usam o tenant na condição de autorização. O teste isolado
+tentou ler e bloquear um grupo do tenant A sob o tenant B e ambas as operações
+foram rejeitadas. Resultado: `PASS`.
 
 ## Limite atual
 

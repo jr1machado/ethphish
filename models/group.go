@@ -277,6 +277,25 @@ func GetGroup(id int64, uid int64) (Group, error) {
 	return g, nil
 }
 
+func GetGroupForTenant(id, tenantID, uid int64) (Group, error) {
+	g := Group{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).First(&g).Error; err != nil {
+			return err
+		}
+		targets, err := getTargetsForTenant(tx, g.Id, tenantID)
+		if err != nil {
+			return err
+		}
+		g.Targets = targets
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return g, err
+}
+
 // GetGroupSummary returns the summary for the requested group
 func GetGroupSummary(id int64, uid int64) (GroupSummary, error) {
 	g := GroupSummary{}
@@ -292,6 +311,42 @@ func GetGroupSummary(id int64, uid int64) (GroupSummary, error) {
 		return g, err
 	}
 	return g, nil
+}
+
+func GetGroupSummaryForTenant(id, tenantID, uid int64) (GroupSummary, error) {
+	g := GroupSummary{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Table("groups").Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).
+			Select("id, name, modified_date, locked").Scan(&g).Error; err != nil {
+			return err
+		}
+		return tx.Table("group_targets").Where("group_id=?", id).Count(&g.NumTargets).Error
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return g, err
+}
+
+func GetGroupSummariesForTenant(tenantID, uid int64) (GroupSummaries, error) {
+	gs := GroupSummaries{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Table("groups").Where("tenant_id=? AND user_id=?", tenantID, uid).
+			Select("id, name, modified_date, locked").Scan(&gs.Groups).Error; err != nil {
+			return err
+		}
+		for i := range gs.Groups {
+			if err := tx.Table("group_targets").Where("group_id=?", gs.Groups[i].Id).Count(&gs.Groups[i].NumTargets).Error; err != nil {
+				return err
+			}
+		}
+		gs.Total = int64(len(gs.Groups))
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return gs, err
 }
 
 // GetGroupByName returns the group, if it exists, specified by the given name and user_id.
@@ -506,6 +561,21 @@ func PutGroup(g *Group) error {
 	return nil
 }
 
+// PutGroupForTenant verifies group ownership before invoking the established
+// target-reconciliation routine. The inner routine operates only on the
+// verified group ID and every incoming target receives the selected tenant.
+func PutGroupForTenant(g *Group, tenantID, uid int64) error {
+	if _, err := GetGroupForTenant(g.Id, tenantID, uid); err != nil {
+		return err
+	}
+	g.TenantID = tenantID
+	g.UserId = uid
+	for i := range g.Targets {
+		g.Targets[i].TenantID = tenantID
+	}
+	return PutGroup(g)
+}
+
 // ToggleGroupLock flips the locked flag for the given group.
 func ToggleGroupLock(id int64, uid int64) (Group, error) {
 	g := Group{}
@@ -515,6 +585,18 @@ func ToggleGroupLock(id int64, uid int64) (Group, error) {
 	}
 	g.Locked = !g.Locked
 	err = db.Model(&g).Update("locked", g.Locked).Error
+	return g, err
+}
+
+func ToggleGroupLockForTenant(id, tenantID, uid int64) (Group, error) {
+	g, err := GetGroupForTenant(id, tenantID, uid)
+	if err != nil {
+		return g, err
+	}
+	g.Locked = !g.Locked
+	err = withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Model(&Group{}).Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).Update("locked", g.Locked).Error
+	})
 	return g, err
 }
 
@@ -533,6 +615,19 @@ func DeleteGroup(g *Group) error {
 		return err
 	}
 	return err
+}
+
+func DeleteGroupForTenant(id, tenantID, uid int64) error {
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		var group Group
+		if err := tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).First(&group).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("group_id=?", id).Delete(&GroupTarget{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).Delete(&Group{}).Error
+	})
 }
 
 // ErrNoContactInfoSpecified is thrown when neither email nor phone is provided for a target

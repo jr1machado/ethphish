@@ -58,9 +58,14 @@ func (as *Server) Groups(w http.ResponseWriter, r *http.Request) {
 
 // GroupsSummary returns a summary of the groups owned by the current user.
 func (as *Server) GroupsSummary(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	switch {
 	case r.Method == "GET":
-		gs, err := models.GetGroupSummaries(ctx.Get(r, "user_id").(int64))
+		gs, err := models.GetGroupSummariesForTenant(scope.TenantID, ctx.Get(r, "user_id").(int64))
 		if err != nil {
 			log.Error(err)
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
@@ -73,9 +78,15 @@ func (as *Server) GroupsSummary(w http.ResponseWriter, r *http.Request) {
 // Group returns details about the requested group.
 // If the group is not valid, Group returns null.
 func (as *Server) Group(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
+	userID := ctx.Get(r, "user_id").(int64)
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
-	g, err := models.GetGroup(id, ctx.Get(r, "user_id").(int64))
+	g, err := models.GetGroupForTenant(id, scope.TenantID, userID)
 	if err != nil {
 		JSONResponse(w, models.Response{Success: false, Message: "Group not found"}, http.StatusNotFound)
 		return
@@ -84,7 +95,7 @@ func (as *Server) Group(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "GET":
 		JSONResponse(w, g, http.StatusOK)
 	case r.Method == "DELETE":
-		err = models.DeleteGroup(&g)
+		err = models.DeleteGroupForTenant(id, scope.TenantID, userID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error deleting group"}, http.StatusInternalServerError)
 			return
@@ -104,8 +115,9 @@ func (as *Server) Group(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		g.ModifiedDate = time.Now().UTC()
-		g.UserId = ctx.Get(r, "user_id").(int64)
-		err = models.PutGroup(&g)
+		g.UserId = userID
+		g.TenantID = scope.TenantID
+		err = models.PutGroupForTenant(&g, scope.TenantID, userID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusBadRequest)
 			return
@@ -120,9 +132,14 @@ func (as *Server) GroupLock(w http.ResponseWriter, r *http.Request) {
 		JSONResponse(w, models.Response{Success: false, Message: "Method not allowed"}, http.StatusMethodNotAllowed)
 		return
 	}
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
-	g, err := models.ToggleGroupLock(id, ctx.Get(r, "user_id").(int64))
+	g, err := models.ToggleGroupLockForTenant(id, scope.TenantID, ctx.Get(r, "user_id").(int64))
 	if err != nil {
 		JSONResponse(w, models.Response{Success: false, Message: "Group not found"}, http.StatusNotFound)
 		return
@@ -132,11 +149,16 @@ func (as *Server) GroupLock(w http.ResponseWriter, r *http.Request) {
 
 // GroupSummary returns a summary of the groups owned by the current user.
 func (as *Server) GroupSummary(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	switch {
 	case r.Method == "GET":
 		vars := mux.Vars(r)
 		id, _ := strconv.ParseInt(vars["id"], 0, 64)
-		g, err := models.GetGroupSummary(id, ctx.Get(r, "user_id").(int64))
+		g, err := models.GetGroupSummaryForTenant(id, scope.TenantID, ctx.Get(r, "user_id").(int64))
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Group not found"}, http.StatusNotFound)
 			return

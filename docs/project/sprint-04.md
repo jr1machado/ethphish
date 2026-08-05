@@ -33,7 +33,7 @@ Evidência executável: `INFO/Sprint-04/ETH-401-405-foundation-validation.md`.
    isolado.
 
 O executor transacional para RLS já está ativo nos fluxos de templates,
-landing pages e criação/listagem de grupos. A política RLS só será habilitada
+landing pages e grupos. A política RLS só será habilitada
 quando os fluxos remanescentes que acessam as mesmas tabelas estiverem
 migrados, para não interromper workers legados.
 

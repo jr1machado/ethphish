@@ -164,6 +164,12 @@ func TestPostgresTenantFoundation(t *testing.T) {
 			t.Fatal("tenant-scoped group list returned another tenant's group")
 		}
 	}
+	if _, err := models.GetGroupForTenant(group.Id, otherTenant.ID, 1); err == nil {
+		t.Fatal("tenant-scoped group lookup returned another tenant's group")
+	}
+	if _, err := models.ToggleGroupLockForTenant(group.Id, otherTenant.ID, 1); err == nil {
+		t.Fatal("tenant-scoped group lock changed another tenant's group")
+	}
 	page := models.Page{TenantID: tenant.ID, UserId: 1, Name: "Tenant page " + suffix, HTML: "<p>Training</p>"}
 	if err := models.PostPageForTenant(&page, tenant.ID); err != nil {
 		t.Fatalf("creating tenant-scoped page: %v", err)
