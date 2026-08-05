@@ -3,6 +3,9 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,13 +14,28 @@ import (
 	"time"
 
 	"github.com/gophish/gophish/config"
+	tenantctx "github.com/gophish/gophish/context"
 	appcrypto "github.com/gophish/gophish/crypto"
+	mid "github.com/gophish/gophish/middleware"
 	"github.com/gophish/gophish/migration"
 	"github.com/gophish/gophish/models"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 const postgresDSNEnv = "ETHPHISH_TEST_POSTGRES_DSN"
+const postgresMigrationsPathEnv = "ETHPHISH_TEST_MIGRATIONS_PATH"
+
+func postgresMigrationsPath(t *testing.T) string {
+	t.Helper()
+	if path := os.Getenv(postgresMigrationsPathEnv); path != "" {
+		return path
+	}
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locating integration test source")
+	}
+	return filepath.Join(filepath.Dir(sourceFile), "..", "..", "db", "db_postgres", "migrations")
+}
 
 // setupPostgres verifies the deployment path used in development and CI: a
 // fresh PostgreSQL database accepts every migration and is available through
@@ -30,11 +48,7 @@ func setupPostgres(t *testing.T) {
 		t.Skipf("set %s to run PostgreSQL integration tests", postgresDSNEnv)
 	}
 
-	_, sourceFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("locating integration test source")
-	}
-	migrationsPath := filepath.Join(filepath.Dir(sourceFile), "..", "..", "db", "db_postgres", "migrations")
+	migrationsPath := postgresMigrationsPath(t)
 
 	t.Setenv(models.InitialAdminPassword, "integration-test-password")
 	t.Setenv(models.InitialAdminApiToken, "integration-test-api-token")
@@ -58,6 +72,71 @@ func TestPostgresMigrationsAndReadiness(t *testing.T) {
 	setupPostgres(t)
 	if _, err := models.GetUserByUsername(models.DefaultAdminUsername); err != nil {
 		t.Fatalf("checking migrated administrative user: %v", err)
+	}
+}
+
+// TestPostgresTenantFoundation verifies that the Sprint 04 tenant, company,
+// and user-grant relations are persisted by PostgreSQL with their intended
+// boundaries. It does not send messages or contact any external service.
+func TestPostgresTenantFoundation(t *testing.T) {
+	setupPostgres(t)
+
+	suffix := time.Now().UTC().Format("20060102150405.000000000")
+	tenant := models.Tenant{Slug: "integration-tenant-" + suffix, Name: "Integration tenant " + suffix, Active: true}
+	if err := models.PostTenant(&tenant); err != nil {
+		t.Fatalf("creating tenant: %v", err)
+	}
+	company := models.Company{TenantID: tenant.ID, Name: "Integration company " + suffix}
+	if err := models.PostCompany(&company); err != nil {
+		t.Fatalf("creating company: %v", err)
+	}
+	grant := models.TenantUser{
+		TenantID:  tenant.ID,
+		UserID:    1,
+		CompanyID: &company.ID,
+		Role:      "tenant_admin",
+	}
+	if err := models.GrantTenantUser(&grant); err != nil {
+		t.Fatalf("granting tenant access: %v", err)
+	}
+
+	storedTenant, err := models.GetTenantBySlug(strings.ToUpper(tenant.Slug))
+	if err != nil || storedTenant.ID != tenant.ID || !storedTenant.Active {
+		t.Fatalf("stored tenant = %#v, err = %v", storedTenant, err)
+	}
+	storedGrant, err := models.GetTenantUser(tenant.ID, 1)
+	if err != nil || storedGrant.CompanyID == nil || *storedGrant.CompanyID != company.ID || storedGrant.Role != "tenant_admin" {
+		t.Fatalf("stored tenant grant = %#v, err = %v", storedGrant, err)
+	}
+	grants, err := models.GetTenantUsers(1)
+	if err != nil || len(grants) == 0 {
+		t.Fatalf("user tenant grants = %#v, err = %v", grants, err)
+	}
+
+	protected := mid.ResolveTenantScope(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		scope, err := tenantctx.RequireTenantScope(r)
+		if err != nil || scope.TenantID != tenant.ID || scope.UserID != 1 {
+			http.Error(w, "unexpected tenant scope", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(mid.TenantIDHeader, fmt.Sprintf("%d", tenant.ID))
+	req = tenantctx.Set(req, "user", models.User{Id: 1})
+	response := httptest.NewRecorder()
+	protected.ServeHTTP(response, req)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("authorized tenant scope returned %d: %s", response.Code, response.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(mid.TenantIDHeader, fmt.Sprintf("%d", tenant.ID+999))
+	req = tenantctx.Set(req, "user", models.User{Id: 1})
+	response = httptest.NewRecorder()
+	protected.ServeHTTP(response, req)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("cross-tenant request returned %d, want %d", response.Code, http.StatusForbidden)
 	}
 }
 
@@ -209,8 +288,7 @@ func TestPostgresSQLiteImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer target.Close()
-	_, sourceFile, _, _ := runtime.Caller(0)
-	migrationsPath := filepath.Join(filepath.Dir(sourceFile), "..", "..", "db", "db_postgres", "migrations")
+	migrationsPath := postgresMigrationsPath(t)
 	latest, err := migration.Latest(migrationsPath)
 	if err != nil {
 		t.Fatal(err)
