@@ -24,8 +24,8 @@ var validConfig = []byte(`{
 		"cert_path": "example.crt",
 		"key_path": "example.key"
 	},
-	"db_name": "sqlite3",
-	"db_path": "gophish.db",
+	"db_name": "postgres",
+	"db_path": "host=postgres dbname=ethphish sslmode=disable",
 	"migrations_prefix": "db/db_",
 	"contact_address": ""
 }`)
@@ -143,15 +143,15 @@ func TestLoadConfigRejectsInvalidBooleanEnvironment(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRejectsSQLiteInProductionRuntime(t *testing.T) {
-	t.Setenv("ETHPHISH_RUNTIME_ENV", "production")
+func TestLoadConfigRejectsSQLite(t *testing.T) {
 	f := createTemporaryConfig(t)
 	defer removeTemporaryConfig(t, f)
 	if _, err := f.Write(validConfig); err != nil {
 		t.Fatalf("error writing config: %v", err)
 	}
+	t.Setenv("ETHPHISH_DB_DRIVER", "sqlite3")
 	if _, err := LoadConfig(f.Name()); err == nil {
-		t.Fatal("expected SQLite configuration to be rejected in production")
+		t.Fatal("expected SQLite configuration to be rejected")
 	}
 }
 

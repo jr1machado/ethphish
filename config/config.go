@@ -93,8 +93,8 @@ func LoadConfig(filepath string) (*Config, error) {
 	if config.DBRequireTLS && config.DBName == "postgres" && postgresTLSDisabled(config.DBPath) {
 		return nil, fmt.Errorf("PostgreSQL TLS is required but db_path sets sslmode=disable")
 	}
-	if strings.EqualFold(os.Getenv("ETHPHISH_RUNTIME_ENV"), "production") && config.DBName == "sqlite3" {
-		return nil, fmt.Errorf("SQLite is not supported in the production runtime; configure PostgreSQL")
+	if config.DBName != "postgres" {
+		return nil, fmt.Errorf("only PostgreSQL is supported by the server runtime; configure ETHPHISH_DB_DRIVER=postgres")
 	}
 	// Choosing the migrations directory based on the database used.
 	config.MigrationsPath = config.MigrationsPath + config.DBName
