@@ -32,9 +32,10 @@ Evidência executável: `INFO/Sprint-04/ETH-401-405-foundation-validation.md`.
 3. RLS PostgreSQL transacional e testes negativos de acesso cruzado em banco
    isolado.
 
-O executor transacional para RLS já está ativo no fluxo de templates. A
-política RLS só será habilitada quando os fluxos remanescentes que acessam a
-mesma tabela estiverem migrados, para não interromper workers legados.
+O executor transacional para RLS já está ativo nos fluxos de templates e
+landing pages. A política RLS só será habilitada quando os fluxos remanescentes
+que acessam as mesmas tabelas estiverem migrados, para não interromper workers
+legados.
 
 Nenhuma rota de negócio é declarada multitenant enquanto ainda não consumir o
 `TenantScope`; essa regra evita uma alegação prematura de isolamento.

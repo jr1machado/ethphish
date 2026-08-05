@@ -60,6 +60,14 @@ executar `set_config('ethphish.tenant_id', ..., true)` em PostgreSQL. O escopo
 é local à transação, portanto não persiste em uma conexão reutilizada pelo pool.
 O teste isolado foi repetido após essa alteração com resultado `PASS`.
 
+## Terceiro incremento — landing pages
+
+As operações de criação, listagem, busca, alteração e exclusão de landing
+pages da API agora recebem `TenantScope` e usam o executor transacional. No
+PostgreSQL isolado, uma página criada no tenant A não foi retornada quando a
+consulta usou o tenant B. Resultado: `PASS`; os dois logs `record not found`
+correspondem às verificações negativas de template e página.
+
 ## Limite atual
 
 O middleware de tenant é aplicado à API e o fluxo de templates já consome o

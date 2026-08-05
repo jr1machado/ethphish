@@ -15,9 +15,15 @@ import (
 
 // Pages handles requests for the /api/pages/ endpoint
 func (as *Server) Pages(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
+	userID := ctx.Get(r, "user_id").(int64)
 	switch {
 	case r.Method == "GET":
-		ps, err := models.GetPages(ctx.Get(r, "user_id").(int64))
+		ps, err := models.GetPagesForTenant(scope.TenantID, userID)
 		if err != nil {
 			log.Error(err)
 		}
@@ -36,7 +42,7 @@ func (as *Server) Pages(w http.ResponseWriter, r *http.Request) {
 			JSONResponse(w, models.Response{Success: false, Message: "No page IDs provided"}, http.StatusBadRequest)
 			return
 		}
-		err = models.DeletePages(req.IDs, ctx.Get(r, "user_id").(int64))
+		err = models.DeletePagesForTenant(req.IDs, scope.TenantID, userID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error deleting pages: " + err.Error()}, http.StatusInternalServerError)
 			return
@@ -52,15 +58,16 @@ func (as *Server) Pages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Check to make sure the name is unique
-		_, err = models.GetPageByName(p.Name, ctx.Get(r, "user_id").(int64))
+		_, err = models.GetPageByNameForTenant(p.Name, scope.TenantID, userID)
 		if err != gorm.ErrRecordNotFound {
 			JSONResponse(w, models.Response{Success: false, Message: "Page name already in use"}, http.StatusConflict)
 			log.Error(err)
 			return
 		}
 		p.ModifiedDate = time.Now().UTC()
-		p.UserId = ctx.Get(r, "user_id").(int64)
-		err = models.PostPage(&p)
+		p.UserId = userID
+		p.TenantID = scope.TenantID
+		err = models.PostPageForTenant(&p, scope.TenantID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
 			return
@@ -72,9 +79,15 @@ func (as *Server) Pages(w http.ResponseWriter, r *http.Request) {
 // Page contains functions to handle the GET'ing, DELETE'ing, and PUT'ing
 // of a Page object
 func (as *Server) Page(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
+	userID := ctx.Get(r, "user_id").(int64)
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
-	p, err := models.GetPage(id, ctx.Get(r, "user_id").(int64))
+	p, err := models.GetPageForTenant(id, scope.TenantID, userID)
 	if err != nil {
 		JSONResponse(w, models.Response{Success: false, Message: "Page not found"}, http.StatusNotFound)
 		return
@@ -83,7 +96,7 @@ func (as *Server) Page(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "GET":
 		JSONResponse(w, p, http.StatusOK)
 	case r.Method == "DELETE":
-		err = models.DeletePage(id, ctx.Get(r, "user_id").(int64))
+		err = models.DeletePageForTenant(id, scope.TenantID, userID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error deleting page"}, http.StatusInternalServerError)
 			return
@@ -100,8 +113,9 @@ func (as *Server) Page(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.ModifiedDate = time.Now().UTC()
-		p.UserId = ctx.Get(r, "user_id").(int64)
-		err = models.PutPage(&p)
+		p.UserId = userID
+		p.TenantID = scope.TenantID
+		err = models.PutPageForTenant(&p, scope.TenantID, userID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error updating page: " + err.Error()}, http.StatusInternalServerError)
 			return

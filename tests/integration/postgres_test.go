@@ -146,6 +146,13 @@ func TestPostgresTenantFoundation(t *testing.T) {
 	if _, err := models.GetTemplateForTenant(otherTemplate.Id, tenant.ID, 1); err == nil {
 		t.Fatal("tenant-scoped lookup returned another tenant's template")
 	}
+	page := models.Page{TenantID: tenant.ID, UserId: 1, Name: "Tenant page " + suffix, HTML: "<p>Training</p>"}
+	if err := models.PostPageForTenant(&page, tenant.ID); err != nil {
+		t.Fatalf("creating tenant-scoped page: %v", err)
+	}
+	if _, err := models.GetPageForTenant(page.Id, otherTenant.ID, 1); err == nil {
+		t.Fatal("tenant-scoped lookup returned another tenant's page")
+	}
 
 	protected := mid.ResolveTenantScope(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scope, err := tenantctx.RequireTenantScope(r)
