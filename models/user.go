@@ -56,10 +56,51 @@ func GetUserByUsername(username string) (User, error) {
 	return u, err
 }
 
-// PutUser updates the given user
+// PutUser updates the given user. A newly created legacy user is granted the
+// default tenant so installations upgraded from the single-tenant model keep
+// working. Multitenant API flows must use PutUserForTenant instead.
 func PutUser(u *User) error {
-	err := db.Save(u).Error
-	return err
+	if u.Id != 0 {
+		return db.Save(u).Error
+	}
+	tx := db.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if err := tx.Save(u).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := tx.Create(&TenantUser{TenantID: 1, UserID: u.Id, Role: "member"}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit().Error
+}
+
+// PutUserForTenant creates a user and its first tenant grant atomically. It
+// is used by multitenant API flows to avoid a transient or unintended default
+// tenant membership.
+func PutUserForTenant(u *User, tenantID int64, companyID *int64, role string) error {
+	if u.Id != 0 {
+		return db.Save(u).Error
+	}
+	tx := db.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if err := tx.Save(u).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if role == "" {
+		role = "member"
+	}
+	if err := tx.Create(&TenantUser{TenantID: tenantID, UserID: u.Id, CompanyID: companyID, Role: role}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit().Error
 }
 
 // EnsureEnoughAdmins ensures that there is more than one user account in

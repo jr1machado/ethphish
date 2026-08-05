@@ -112,6 +112,40 @@ func TestPostgresTenantFoundation(t *testing.T) {
 	if err != nil || len(grants) == 0 {
 		t.Fatalf("user tenant grants = %#v, err = %v", grants, err)
 	}
+	template := models.Template{
+		TenantID: tenant.ID,
+		UserId:   1,
+		Name:     "Tenant-scoped template " + suffix,
+		Subject:  "Authorized simulation",
+		Text:     "Training message",
+	}
+	if err := models.PostTemplate(&template); err != nil {
+		t.Fatalf("creating tenant-scoped template: %v", err)
+	}
+	storedTemplate, err := models.GetTemplate(template.Id, 1)
+	if err != nil || storedTemplate.TenantID != tenant.ID {
+		t.Fatalf("stored tenant-scoped template = %#v, err = %v", storedTemplate, err)
+	}
+	otherTenant := models.Tenant{Slug: "integration-other-tenant-" + suffix, Name: "Integration other tenant " + suffix, Active: true}
+	if err := models.PostTenant(&otherTenant); err != nil {
+		t.Fatalf("creating second tenant: %v", err)
+	}
+	if err := models.GrantTenantUser(&models.TenantUser{TenantID: otherTenant.ID, UserID: 1, Role: "tenant_admin"}); err != nil {
+		t.Fatalf("granting second tenant access: %v", err)
+	}
+	otherTemplate := models.Template{
+		TenantID: otherTenant.ID,
+		UserId:   1,
+		Name:     "Other tenant template " + suffix,
+		Subject:  "Authorized simulation",
+		Text:     "Training message",
+	}
+	if err := models.PostTemplate(&otherTemplate); err != nil {
+		t.Fatalf("creating second tenant template: %v", err)
+	}
+	if _, err := models.GetTemplateForTenant(otherTemplate.Id, tenant.ID, 1); err == nil {
+		t.Fatal("tenant-scoped lookup returned another tenant's template")
+	}
 
 	protected := mid.ResolveTenantScope(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scope, err := tenantctx.RequireTenantScope(r)

@@ -21,6 +21,7 @@ const (
 // for reported emails
 type IMAP struct {
 	Id                          int64     `json:"id" gorm:"primary_key;auto_increment"`
+	TenantID                    int64     `json:"-" gorm:"column:tenant_id;default:1"`
 	Name                        string    `json:"name"`
 	UserId                      int64     `json:"user_id" gorm:"column:user_id"`
 	Enabled                     bool      `json:"enabled"`

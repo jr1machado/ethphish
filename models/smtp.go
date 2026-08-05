@@ -33,6 +33,7 @@ func (d *Dialer) Dial() (mailer.Sender, error) {
 // SMTP contains the attributes needed to handle the sending of campaign emails
 type SMTP struct {
 	Id               int64     `json:"id" gorm:"column:id; primary_key:yes"`
+	TenantID         int64     `json:"-" gorm:"column:tenant_id;default:1"`
 	UserId           int64     `json:"-" gorm:"column:user_id"`
 	Interface        string    `json:"interface_type" gorm:"column:interface_type"`
 	Name             string    `json:"name"`

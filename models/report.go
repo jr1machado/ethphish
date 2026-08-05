@@ -10,6 +10,7 @@ import (
 // Report represents a report generation job
 type Report struct {
 	Id            int64      `json:"id" gorm:"column:id;primary_key;AUTO_INCREMENT"`
+	TenantID      int64      `json:"-" gorm:"column:tenant_id;default:1"`
 	UserId        int64      `json:"user_id" gorm:"column:user_id"`
 	CampaignIds   string     `json:"campaign_ids" gorm:"column:campaign_ids"` // JSON array
 	CampaignSetId *int64     `json:"campaign_set_id,omitempty" gorm:"column:campaign_set_id"`

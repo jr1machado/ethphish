@@ -9,6 +9,7 @@ import (
 // Webhook represents the webhook model
 type Webhook struct {
 	Id       int64  `json:"id" gorm:"column:id; primary_key:yes"`
+	TenantID int64  `json:"-" gorm:"column:tenant_id;default:1"`
 	Name     string `json:"name"`
 	URL      string `json:"url"`
 	Secret   string `json:"secret"`

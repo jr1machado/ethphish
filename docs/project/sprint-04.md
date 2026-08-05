@@ -26,9 +26,11 @@ Evidência executável: `INFO/Sprint-04/ETH-401-405-foundation-validation.md`.
 ## Próximos incrementos
 
 1. Aplicação do middleware de seleção autorizada às rotas tenant-owned.
-2. `tenant_id` nas entidades prioritárias, retropreenchimento controlado e
-   consultas escopadas.
-3. RLS PostgreSQL e testes negativos de acesso cruzado em banco isolado.
+2. Consultas escopadas nas entidades prioritárias restantes. `tenant_id` e o
+   retropreenchimento controlado já foram aplicados a campanhas, grupos,
+   templates, landing pages, SMTP, SMS, IMAP, webhooks e relatórios.
+3. RLS PostgreSQL transacional e testes negativos de acesso cruzado em banco
+   isolado.
 
 Nenhuma rota de negócio é declarada multitenant enquanto ainda não consumir o
 `TenantScope`; essa regra evita uma alegação prematura de isolamento.

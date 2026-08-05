@@ -37,8 +37,25 @@ O teste cria tenant, empresa e `tenant_user`; relê as relações no PostgreSQL;
 aceita a seleção do tenant concedido e rejeita a seleção de outro tenant com
 HTTP 403. Os testes unitários de `context` e `middleware` também passaram.
 
-## Limite deste incremento
+## Segundo incremento — entidades prioritárias e templates
 
-As rotas de negócio ainda não consomem o `TenantScope`. Portanto, este registro
-não afirma isolamento completo de campanhas, templates, grupos ou resultados.
-Essa proteção será adicionada junto de `tenant_id`, consultas escopadas e RLS.
+Validado no mesmo banco isolado:
+
+- a migração cria o tenant legado, retropreenche `tenant_id` e aplica a coluna
+  a `campaigns`, `groups`, `templates`, `pages`, `smtp`, `sms_profiles`,
+  `sms_templates`, `imap`, `webhooks` e `reports`;
+- um template criado com `tenant_id` explícito preserva o vínculo ao ser relido
+  no PostgreSQL;
+- o mesmo usuário recebeu concessões em dois tenants e um template do segundo
+  não foi retornado por `GetTemplateForTenant` sob o escopo do primeiro;
+- a seleção de tenant continua rejeitando uma concessão inexistente com 403.
+
+Resultado do teste: `PASS`. A mensagem `record not found` no log foi a
+verificação negativa esperada para o template de outro tenant.
+
+## Limite atual
+
+O middleware de tenant é aplicado à API e o fluxo de templates já consome o
+escopo em criação, leitura, alteração e exclusão. Os demais fluxos de negócio
+ainda precisam migrar para consultas escopadas; RLS PostgreSQL só será ativado
+quando essas transações receberem o contexto de tenant de forma segura.

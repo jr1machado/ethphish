@@ -17,6 +17,7 @@ import (
 // Groups contain 1..* Targets
 type Group struct {
 	Id           int64     `json:"id"`
+	TenantID     int64     `json:"-" gorm:"column:tenant_id;default:1"`
 	UserId       int64     `json:"-"`
 	Name         string    `json:"name"`
 	ModifiedDate time.Time `json:"modified_date"`

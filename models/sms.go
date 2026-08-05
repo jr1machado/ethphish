@@ -11,6 +11,7 @@ import (
 // SMS contains the attributes needed to handle the sending of campaign SMS messages
 type SMS struct {
 	Id             int64     `json:"id" gorm:"column:id; primary_key:yes"`
+	TenantID       int64     `json:"-" gorm:"column:tenant_id;default:1"`
 	UserId         int64     `json:"-" gorm:"column:user_id"`
 	Name           string    `json:"name"`
 	Provider       string    `json:"provider"` // "twilio", "nexmo", etc.

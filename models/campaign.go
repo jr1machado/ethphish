@@ -15,6 +15,7 @@ import (
 // Campaign is a struct representing a created campaign
 type Campaign struct {
 	Id            int64       `json:"id"`
+	TenantID      int64       `json:"-" gorm:"column:tenant_id;default:1"`
 	UserId        int64       `json:"-"`
 	Name          string      `json:"name" sql:"not null"`
 	CreatedDate   time.Time   `json:"created_date"`

@@ -14,6 +14,7 @@ var ErrSMSTemplateTextNotSpecified = errors.New("SMS template text not specified
 // SMSTemplate contains the attributes for an SMS template
 type SMSTemplate struct {
 	Id           int64     `json:"id"`
+	TenantID     int64     `json:"-" gorm:"column:tenant_id;default:1"`
 	UserId       int64     `json:"-"`
 	Name         string    `json:"name"`
 	From         string    `json:"from" gorm:"column:from_sender"` // Optional sender override
