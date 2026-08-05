@@ -25,6 +25,9 @@ go test ./tests/integration -run TestPostgresMigrationsAndReadiness -count=1
 ./scripts/backup-postgres.sh
 ```
 
+Para um destino isolado de importação, use `postgres-schema-prepare`; ele não
+executa o bootstrap do servidor nem cria usuários administrativos.
+
 Os relatórios de pré-flight, importação, reconciliação e restore devem ser
 gravados nesta pasta sem credenciais, dados pessoais, conteúdo de campanhas ou
 outros dados de produção.
