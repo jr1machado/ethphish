@@ -1,10 +1,10 @@
-# Release notes — v0.1.0
+# Release notes — EthPhish v0.2.0
 
 Data: 2026-08-05
 
 ## Resumo
 
-Primeira release de fundação do EthPhish, fork independente para testes éticos
+Release de transição PostgreSQL do EthPhish, fork independente para testes éticos
 de phishing e quishing. Esta versão estabiliza a plataforma para desenvolvimento
 controlado; não é uma autorização para campanhas externas ou produção pública.
 
@@ -12,7 +12,7 @@ controlado; não é uma autorização para campanhas externas ou produção púb
 
 ### Produto e governança
 
-- identidade EthPhish, `VERSION=0.1.0`, uso aceitável, segurança, ADRs e
+- identidade EthPhish, `VERSION=0.2.0`, uso aceitável, segurança, ADRs e
   Definition of Done;
 - baseline Anglerphish 1.3.0 rastreado e matriz de caracterização;
 - documentação comercial e de arquitetura, incluindo limites éticos.
@@ -33,6 +33,12 @@ controlado; não é uma autorização para campanhas externas ou produção púb
 - health (`/healthz`) e readiness (`/readyz`) sem dados de conexão;
 - backup lógico e ensaio de restore em banco PostgreSQL isolado;
 - opção de exigir TLS de banco com `ETHPHISH_DB_REQUIRE_TLS=true`.
+- executor local de migrations SQL que remove a dependência Goose do binário;
+- build do servidor sem CGO e imagem com migrations PostgreSQL apenas;
+- pré-flight, preparador de schema isolado e importador transacional
+  SQLite→PostgreSQL, aprovados contra PostgreSQL efêmero no CI;
+- paridade de persistência PostgreSQL para campanhas, SMS, IMAP, segredos
+  cifrados, webhooks e transições de relatórios.
 
 ### Qualidade e supply chain
 
@@ -47,7 +53,7 @@ controlado; não é uma autorização para campanhas externas ou produção púb
 
 ## Integrações
 
-| Integração | Estado v0.1.0 | Uso |
+| Integração | Estado v0.2.0 | Uso |
 | --- | --- | --- |
 | PostgreSQL | ativo no Compose | dados, migrations e readiness |
 | Caddy | ativo no Compose | TLS e proxy web de desenvolvimento |
@@ -68,4 +74,5 @@ controlado; não é uma autorização para campanhas externas ou produção púb
 ## Limitações de release
 
 Consulte [ISSUES_CONHECIDOS.md](ISSUES_CONHECIDOS.md). Workers distribuídos,
-multitenancy e operação externa permanecem fora desta release.
+multitenancy, reconciliação criptográfica integral de importações e operação
+externa permanecem fora desta release.
