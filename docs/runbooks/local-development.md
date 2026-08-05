@@ -95,6 +95,15 @@ pg_restore --clean --if-exists --no-owner --no-privileges \
   -h localhost -U ethphish -d ethphish /caminho/ethphish-AAAAMMDDTHHMMSSZ.dump
 ```
 
+Para ensaiar sem tocar na base `ethphish` ativa, crie o dump e execute o
+restore isolado. O script só aceita o banco descartável
+`ethphish_restore_verify` e valida a versão mais recente das migrations:
+
+```sh
+./scripts/backup-postgres.sh
+./scripts/restore-postgres-isolated.sh /tmp/ethphish-backups/ethphish-AAAAMMDDTHHMMSSZ.dump
+```
+
 O rollback de uma versão deve ser ensaiado primeiro em uma cópia do backup; não
 execute migrations `down` diretamente em produção. Na inicialização,
 instâncias PostgreSQL usam um advisory lock para impedir migrations
