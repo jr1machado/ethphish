@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -16,9 +17,19 @@ func setupOIDCTest(t *testing.T) *testContext {
 	t.Helper()
 	t.Setenv(auth.OIDCClientSecretEnv, "test-secret")
 	ctx := setupTest(t)
+	ctx.oidcServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"jwks_uri":%q}`,
+				ctx.oidcServer.URL, ctx.oidcServer.URL+"/authorize", ctx.oidcServer.URL+"/token", ctx.oidcServer.URL+"/keys")
+		default:
+			w.WriteHeader(http.StatusNoContent)
+		}
+	}))
 	ctx.config.OIDC = config.OIDC{
 		Enabled:       true,
-		Issuer:        "https://keycloak.example.com/realms/test",
+		Issuer:        ctx.oidcServer.URL,
 		ClientID:      "anglerphish-admin",
 		RedirectURL:   fmt.Sprintf("%s/auth/oidc/callback", ctx.adminServer.URL),
 		RequiredGroup: "anglerphish-admins",
@@ -37,6 +48,7 @@ type testContext struct {
 	config      *config.Config
 	adminServer *httptest.Server
 	phishServer *httptest.Server
+	oidcServer  *httptest.Server
 	origPath    string
 }
 
@@ -97,6 +109,9 @@ func tearDown(_ *testing.T, ctx *testContext) {
 	// Tear down the admin and phishing servers
 	ctx.adminServer.Close()
 	ctx.phishServer.Close()
+	if ctx.oidcServer != nil {
+		ctx.oidcServer.Close()
+	}
 	// Reset the path for the next test
 	os.Chdir(ctx.origPath)
 }

@@ -1,0 +1,14 @@
+.git
+.github
+.agents
+.codex
+INFO
+node_modules
+reports/python/venv
+reports/files
+files
+*.db
+*.db-*
+*.log
+gophish
+ethphish

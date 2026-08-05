@@ -1,0 +1,9 @@
+* @ethphish/maintainers
+/auth/ @ethphish/security @ethphish/backend
+/crypto/ @ethphish/security @ethphish/backend
+/middleware/ @ethphish/security @ethphish/backend
+/db/ @ethphish/backend @ethphish/platform
+/.github/ @ethphish/platform @ethphish/security
+/Dockerfile @ethphish/platform @ethphish/security
+/compose.yaml @ethphish/platform @ethphish/security
+/docs/adrs/ @ethphish/architecture

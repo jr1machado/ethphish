@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"database/sql"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -18,6 +19,7 @@ import (
 
 	log "github.com/gophish/gophish/logger"
 	"github.com/jinzhu/gorm"
+	_ "github.com/lib/pq"           // Blank import needed to import PostgreSQL
 	_ "github.com/mattn/go-sqlite3" // Blank import needed to import sqlite3
 )
 
@@ -25,6 +27,10 @@ var db *gorm.DB
 var conf *config.Config
 
 const MaxDatabaseConnectionAttempts int = 10
+
+// postgresMigrationLockID serializes Goose migrations across application
+// instances that share a PostgreSQL database.
+const postgresMigrationLockID int64 = 0x4554485048495348
 
 // DefaultAdminUsername is the default username for the administrative user
 const DefaultAdminUsername = "admin"
@@ -96,6 +102,9 @@ func chooseDBDriver(name, openStr string) goose.DBDriver {
 	d := goose.DBDriver{Name: name, OpenStr: openStr}
 
 	switch name {
+	case "postgres":
+		d.Import = "github.com/lib/pq"
+		d.Dialect = &goose.PostgresDialect{}
 	case "mysql":
 		d.Import = "github.com/go-sql-driver/mysql"
 		d.Dialect = &goose.MySqlDialect{}
@@ -197,17 +206,17 @@ func Setup(c *config.Config) error {
 	}
 	db.LogMode(false)
 	db.SetLogger(log.Logger)
-	db.DB().SetMaxOpenConns(1)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
 	// Migrate up to the latest version
-	err = goose.RunMigrationsOnDb(migrateConf, migrateConf.MigrationsDir, latest, db.DB())
+	err = runMigrations(conf.DBName, migrateConf, latest, db.DB())
 	if err != nil {
 		log.Error(err)
 		return err
 	}
+	configureConnectionPool(db.DB(), conf)
 	// Ensure preset URL templates exist
 	err = EnsurePresetURLTemplates(db)
 	if err != nil {
@@ -268,4 +277,59 @@ func Setup(c *config.Config) error {
 		}
 	}
 	return nil
+}
+
+func runMigrations(driver string, migrateConf *goose.DBConf, latest int64, database *sql.DB) error {
+	if driver != "postgres" {
+		return goose.RunMigrationsOnDb(migrateConf, migrateConf.MigrationsDir, latest, database)
+	}
+
+	// An advisory lock makes concurrent starts wait for the migration owner.
+	// The temporary one-connection pool guarantees that Goose uses the session
+	// holding the lock.
+	database.SetMaxOpenConns(1)
+	database.SetMaxIdleConns(1)
+	if _, err := database.Exec("SELECT pg_advisory_lock($1)", postgresMigrationLockID); err != nil {
+		return fmt.Errorf("acquiring PostgreSQL migration lock: %w", err)
+	}
+	defer func() {
+		if _, err := database.Exec("SELECT pg_advisory_unlock($1)", postgresMigrationLockID); err != nil {
+			log.Errorf("releasing PostgreSQL migration lock: %v", err)
+		}
+	}()
+	return goose.RunMigrationsOnDb(migrateConf, migrateConf.MigrationsDir, latest, database)
+}
+
+func configureConnectionPool(database *sql.DB, config *config.Config) {
+	maxOpen := config.DBMaxOpenConns
+	maxIdle := config.DBMaxIdleConns
+	maxLifetime := config.DBConnMaxLife
+	if config.DBName == "sqlite3" {
+		maxOpen = 1
+		// An in-memory SQLite database exists per connection. Keep the single
+		// connection idle between Goose statements so the schema is retained.
+		maxIdle = 1
+	} else {
+		if maxOpen == 0 {
+			maxOpen = 10
+		}
+		if maxIdle == 0 {
+			maxIdle = 5
+		}
+		if maxLifetime == 0 {
+			maxLifetime = 30 * time.Minute
+		}
+	}
+	database.SetMaxOpenConns(maxOpen)
+	database.SetMaxIdleConns(maxIdle)
+	database.SetConnMaxLifetime(maxLifetime)
+}
+
+// Ping reports whether the currently configured database is reachable. It is
+// used by readiness checks and never exposes connection details.
+func Ping() error {
+	if db == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	return db.DB().Ping()
 }

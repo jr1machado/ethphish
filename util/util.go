@@ -12,9 +12,11 @@ import (
 	"io"
 	"io/ioutil"
 	"math/big"
+	"net"
 	"net/http"
 	"net/mail"
 	"os"
+	"path/filepath"
 	"regexp"
 	"time"
 
@@ -143,17 +145,33 @@ func ParseCSV(r *http.Request) ([]models.Target, error) {
 	return ts, nil
 }
 
-// CheckAndCreateSSL is a helper to setup self-signed certificates for the administrative interface.
+// CheckAndCreateSSL creates a self-signed certificate when both files are absent.
+// Prefer CheckAndCreateSSLForHosts when the certificate is served to clients.
 func CheckAndCreateSSL(cp string, kp string) error {
-	// Check whether there is an existing SSL certificate and/or key, and if so, abort execution of this function
-	if _, err := os.Stat(cp); !os.IsNotExist(err) {
+	return CheckAndCreateSSLForHosts(cp, kp)
+}
+
+// CheckAndCreateSSLForHosts creates a self-signed server certificate with
+// subject alternative names for the supplied DNS names and IP addresses. It
+// never replaces an existing certificate: certificate rotation remains an
+// explicit deployment action.
+func CheckAndCreateSSLForHosts(cp string, kp string, hosts ...string) error {
+	certExists := fileExists(cp)
+	keyExists := fileExists(kp)
+	if certExists && keyExists {
 		return nil
 	}
-	if _, err := os.Stat(kp); !os.IsNotExist(err) {
-		return nil
+	if certExists != keyExists {
+		return fmt.Errorf("incomplete TLS key pair: both %s and %s must exist or be absent", cp, kp)
+	}
+	if err := os.MkdirAll(filepath.Dir(cp), 0750); err != nil {
+		return fmt.Errorf("creating TLS certificate directory: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(kp), 0750); err != nil {
+		return fmt.Errorf("creating TLS key directory: %w", err)
 	}
 
-	log.Infof("Creating new self-signed certificates for administration interface")
+	log.Info("Creating new self-signed TLS certificate")
 
 	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
@@ -174,7 +192,7 @@ func CheckAndCreateSSL(cp string, kp string) error {
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"Gophish"},
+			Organization: []string{"EthPhish development"},
 		},
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
@@ -182,6 +200,13 @@ func CheckAndCreateSSL(cp string, kp string) error {
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
+	}
+	for _, host := range hosts {
+		if ip := net.ParseIP(host); ip != nil {
+			template.IPAddresses = append(template.IPAddresses, ip)
+		} else if host != "" {
+			template.DNSNames = append(template.DNSNames, host)
+		}
 	}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, priv.Public(), priv)
@@ -211,4 +236,9 @@ func CheckAndCreateSSL(cp string, kp string) error {
 
 	log.Info("TLS Certificate Generation complete")
 	return nil
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

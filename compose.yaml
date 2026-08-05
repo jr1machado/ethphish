@@ -1,0 +1,113 @@
+name: ethphish-dev
+
+services:
+  tls-init:
+    image: ethphish-dev-server
+    build:
+      context: .
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["install -d -o 10001 -g 10001 -m 0750 /var/lib/ethphish/tls"]
+    user: "0:0"
+    volumes:
+      - ethphish-tls:/var/lib/ethphish/tls
+    network_mode: none
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+
+  server:
+    build:
+      context: .
+    environment:
+      ETHPHISH_ADMIN_LISTEN_URL: 0.0.0.0:3333
+      ETHPHISH_ADMIN_USE_TLS: "true"
+      ETHPHISH_ADMIN_CERT_PATH: /var/lib/ethphish/tls/admin.crt
+      ETHPHISH_ADMIN_KEY_PATH: /var/lib/ethphish/tls/admin.key
+      ETHPHISH_PHISH_LISTEN_URL: 0.0.0.0:8080
+      ETHPHISH_PHISH_USE_TLS: "true"
+      ETHPHISH_PHISH_CERT_PATH: /var/lib/ethphish/tls/web.crt
+      ETHPHISH_PHISH_KEY_PATH: /var/lib/ethphish/tls/web.key
+      ETHPHISH_DB_DRIVER: postgres
+      ETHPHISH_DB_DSN: host=postgres port=5432 user=ethphish password=development-only-change-me dbname=ethphish sslmode=disable
+      ETHPHISH_DB_MAX_OPEN_CONNECTIONS: "10"
+      ETHPHISH_DB_MAX_IDLE_CONNECTIONS: "5"
+      ETHPHISH_DB_CONNECTION_MAX_LIFETIME: 30m
+      ETHPHISH_REPORTS_STORAGE_PATH: /var/lib/ethphish/reports
+    expose:
+      - "3333"
+      - "8080"
+    volumes:
+      - ethphish-data:/var/lib/ethphish
+      - ethphish-tls:/var/lib/ethphish/tls
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    networks:
+      - admin_internal
+      - application_internal
+      - data_internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      tls-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  reverse-proxy:
+    image: caddy:2.10.0-alpine
+    ports:
+      - "9443:9443"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    read_only: true
+    tmpfs:
+      - /config
+      - /data
+    networks:
+      - application_internal
+
+  postgres:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_DB: ethphish
+      POSTGRES_USER: ethphish
+      POSTGRES_PASSWORD: development-only-change-me
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - data_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ethphish -d ethphish"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4.1.2-alpine
+    networks:
+      - data_internal
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+networks:
+  admin_internal:
+    internal: true
+  application_internal:
+  data_internal:
+    internal: true
+
+volumes:
+  ethphish-data:
+  ethphish-tls:
+  postgres-data:

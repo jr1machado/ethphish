@@ -1,44 +1,35 @@
-# Contribute to gophish
+# Contribuindo com o EthPhish
 
-Thank you for your interest in contributing to gophish! It is our goal to make the best simulated phishing framework possible, and we are excited you want to help out.
+O EthPhish é um fork corporativo do Anglerphish 1.3.0 para simulações éticas e
+autorizadas. Mudanças voltadas a evasão, captura de credenciais reais ou uso não
+autorizado não fazem parte do produto.
 
-This guide details how to contribute to gophish in a way that is efficient for everyone involved.
+## Fluxo de desenvolvimento
 
-Gophish currently only comes in one flavor, gophish Community Edition (CE), which is our free and open source edition. In the future, we reserve the right to create an Enterprise Edition, though we're currently pouring our effort into create a rock-solid open source platform. This document will be updated if an EE edition is created.
+1. Crie uma branch `feature/ETH-nnn-descricao`, `fix/ETH-nnn-descricao` ou
+   `docs/ETH-nnn-descricao` a partir de `develop`.
+2. Mantenha commits pequenos, rastreáveis e sem segredos.
+3. Execute formatação, análise estática e testes.
+4. Abra pull request com risco, testes, impacto multitenant e rollback.
+5. Obtenha as aprovações exigidas por `CODEOWNERS`.
 
-## Contributor license agreement
+## Definition of Done
 
-By submitting code as an individual you agree to the
-[individual contributor license agreement](doc/individual_contributor_license_agreement.md).
-By submitting code as an entity you agree to the
-[corporate contributor license agreement](doc/corporate_contributor_license_agreement.md).
+Uma alteração precisa de revisão, testes proporcionais ao risco, autorização no
+backend, logs sem dados sensíveis, documentação, análise de segurança e plano de
+reversão. Mudanças de banco precisam de migration e procedimento de rollback.
 
-## Security vulnerability disclosure
+Mudanças que manipulam entidades de negócio também devem declarar como o tenant
+é determinado e incluir teste que impeça acesso cruzado.
 
-Please report suspected security vulnerabilities in private to
-`security@getgophish.com`.
-Please do **NOT** create publicly viewable issues for suspected security
-vulnerabilities.
+## Verificação local
 
-## Closing policy for issues and merge requests
+```sh
+gofmt -w caminho/do/arquivo.go
+go vet ./...
+go test -race ./...
+docker compose config
+docker build -t ethphish:dev .
+```
 
-It is our goal that gophish will become a popular tool for the infosec community. If this were to happen, we may begin receiving more issues and merge requests than we can keep up with.
-
-Out of respect for our volunteers, issues and merge requests not in line with the guidelines listed in this document may be closed without notice. It will always be our goal to try and provide at least a reason why the issue is closed as much as possible.
-
-Please treat our volunteers with courtesy and respect, it will go a long way
-towards getting your issue resolved.
-
-Issues and merge requests should be in English and contain appropriate language
-for audiences of all ages.
-
-## I want to contribute!
-
-**Awesome!** We're excited to have your help. If you want to contribute to gophish, but are not sure where to start,
-look for [issues with the label `contributor-friendly`][contributor-friendly]. These issues
-will be of reasonable size and challenge, as well as not requiring a ton of internal plumbing on the gophish source code.
-
-## Have Questions?
-If you ever have questions, please don't hesitate to reach out to us directly at `support@getgophish.com`
-
-[contributor-friendly]: https://github.com/gophish/gophish/labels/contributor-friendly
+Consulte `SECURITY.md` antes de relatar vulnerabilidades.
