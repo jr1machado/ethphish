@@ -42,6 +42,8 @@ controlado; não é uma autorização para campanhas externas ou produção púb
 - correção das CVEs de alta e crítica severidade encontradas na imagem inicial:
   Go 1.25.12, `golang.org/x/{crypto,net,oauth2,text}`, `go-jose` e `logrus`
   foram atualizados para versões corrigidas.
+- `gorilla/csrf` foi atualizado para 1.7.3 e o SDK Twilio para 1.30.9,
+  removendo a cadeia legada de `github.com/golang-jwt/jwt` sem correção.
 
 ## Integrações
 
