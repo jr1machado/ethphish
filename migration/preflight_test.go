@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -72,6 +74,39 @@ func TestApplyTracksAndDoesNotReapplyMigrations(t *testing.T) {
 	}
 	if version != latest || tableCount != 1 {
 		t.Fatalf("migration state = version %d, table count %d; want version %d and table count 1", version, tableCount, latest)
+	}
+}
+
+func TestSplitUpSQLAcceptsNoOpMigration(t *testing.T) {
+	statements, err := splitUpSQL(strings.NewReader("-- +goose Up\n-- intentionally no-op\n\n-- +goose Down\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(statements) != 0 {
+		t.Fatalf("statements = %d, want 0", len(statements))
+	}
+}
+
+func TestPostgresMigrationScriptsParse(t *testing.T) {
+	_, source, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locating migration test source")
+	}
+	directory := filepath.Join(filepath.Dir(source), "..", "db", "db_postgres", "migrations")
+	files, err := migrationFiles(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		reader, err := os.Open(file.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, parseErr := splitUpSQL(reader)
+		reader.Close()
+		if parseErr != nil {
+			t.Fatalf("parsing %s: %v", filepath.Base(file.path), parseErr)
+		}
 	}
 }
 

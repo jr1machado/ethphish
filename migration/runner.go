@@ -166,7 +166,9 @@ func splitUpSQL(r io.Reader) ([]string, error) {
 			case "StatementEnd":
 				if active {
 					block = false
-					statements = append(statements, buffer.String())
+					if hasSQL(buffer.String()) {
+						statements = append(statements, buffer.String())
+					}
 					buffer.Reset()
 				}
 			}
@@ -176,17 +178,29 @@ func splitUpSQL(r io.Reader) ([]string, error) {
 		}
 		buffer.WriteString(line + "\n")
 		if !block && sqlLineEnds(line) {
-			statements = append(statements, buffer.String())
+			if hasSQL(buffer.String()) {
+				statements = append(statements, buffer.String())
+			}
 			buffer.Reset()
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(buffer.String()) != "" {
+	if hasSQL(buffer.String()) {
 		return nil, fmt.Errorf("unterminated SQL statement")
 	}
 	return statements, nil
+}
+
+func hasSQL(script string) bool {
+	for _, line := range strings.Split(script, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "--") {
+			return true
+		}
+	}
+	return false
 }
 
 func sqlLineEnds(line string) bool {
