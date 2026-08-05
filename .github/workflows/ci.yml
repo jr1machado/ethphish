@@ -65,6 +65,8 @@ jobs:
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   image:
     name: Container build and scan
@@ -80,7 +82,7 @@ jobs:
           tags: ethphish:${{ github.sha }}
       - name: Verify runtime user
         run: test "$(docker image inspect ethphish:${{ github.sha }} --format '{{.Config.User}}')" = "10001:10001"
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ethphish:${{ github.sha }}
           severity: CRITICAL,HIGH
