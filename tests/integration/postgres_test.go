@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gophish/gophish/config"
+	appcrypto "github.com/gophish/gophish/crypto"
 	"github.com/gophish/gophish/migration"
 	"github.com/gophish/gophish/models"
 	_ "github.com/mattn/go-sqlite3"
@@ -241,5 +242,65 @@ func TestPostgresSQLiteImport(t *testing.T) {
 	var username string
 	if err := target.QueryRow(`SELECT username FROM users WHERE id = 7`).Scan(&username); err != nil || username != "legacy-admin" {
 		t.Fatalf("validating imported user: username=%q err=%v", username, err)
+	}
+}
+
+// TestPostgresOperationalPersistence covers IMAP, encryption, webhooks and
+// report status persistence without connecting to any external endpoint.
+func TestPostgresOperationalPersistence(t *testing.T) {
+	setupPostgres(t)
+	key, err := appcrypto.GenerateEncryptionKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := appcrypto.InitEncryptionWithKey(key); err != nil {
+		t.Fatal(err)
+	}
+	secret, err := appcrypto.Encrypt("synthetic-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	smtp := models.SMTP{Name: "encrypted smtp", Host: "127.0.0.1:2525", FromAddress: "training@example.test", Password: secret, UserId: 1}
+	if err := models.PostSMTP(&smtp); err != nil {
+		t.Fatal(err)
+	}
+	im := models.IMAP{Host: "127.0.0.1", Port: 993, Username: "training", Password: secret, TLS: true, IMAPFreq: 60}
+	if err := models.PostIMAP(&im, 1); err != nil {
+		t.Fatal(err)
+	}
+	storedIMAP, err := models.GetIMAPById(im.Id, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain, err := appcrypto.Decrypt(storedIMAP.Password); err != nil || plain != "synthetic-secret" {
+		t.Fatalf("decrypting IMAP password: %q %v", plain, err)
+	}
+	wrongKey, _ := appcrypto.GenerateEncryptionKey()
+	appcrypto.InitEncryptionWithKey(wrongKey)
+	if _, err := appcrypto.Decrypt(storedIMAP.Password); err == nil {
+		t.Fatal("wrong encryption key decrypted persisted secret")
+	}
+	appcrypto.InitEncryptionWithKey(key)
+	webhook := models.Webhook{Name: "persistence only", URL: "https://webhook.example.test/events", Secret: secret, IsActive: true}
+	if err := models.PostWebhook(&webhook); err != nil {
+		t.Fatal(err)
+	}
+	active, err := models.GetActiveWebhooks()
+	if err != nil || len(active) == 0 {
+		t.Fatalf("reading active webhooks: %v", err)
+	}
+	report := models.Report{UserId: 1, CampaignIds: "[]", Format: "json"}
+	if err := models.PostReport(&report); err != nil {
+		t.Fatal(err)
+	}
+	if err := models.UpdateReportStatus(report.Id, models.ReportStatusProcessing); err != nil {
+		t.Fatal(err)
+	}
+	if err := models.UpdateReportStatus(report.Id, models.ReportStatusCompleted); err != nil {
+		t.Fatal(err)
+	}
+	storedReport, err := models.GetReport(report.Id, 1)
+	if err != nil || storedReport.Status != models.ReportStatusCompleted || storedReport.StartedAt == nil || storedReport.CompletedAt == nil {
+		t.Fatalf("report status transition: %#v %v", storedReport, err)
 	}
 }
