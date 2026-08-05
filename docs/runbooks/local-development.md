@@ -74,7 +74,18 @@ O JSON de saída é evidência de reconciliação e não contém linhas, credenc
 nem o DSN. O comando retorna `3` quando encontrar dados de negócio no destino;
 nesse caso, interrompa o processo e aprove explicitamente o destino correto.
 Execute-o somente contra uma cópia isolada e aprovada da base legada. A cópia
-dos dados ainda não faz parte desta etapa.
+dos dados exige aprovação explícita e destino vazio:
+
+```sh
+go run ./cmd/sqlite-postgres-import \
+  --sqlite /caminho/legado.db \
+  --postgres-dsn 'postgres://usuario:senha@host:5432/ethphish?sslmode=verify-full' \
+  --approve I_UNDERSTAND_THIS_WRITES_TO_POSTGRES
+```
+
+O importador preserva a origem somente leitura, executa a escrita em uma
+transação no destino e emite JSON com as contagens antes/depois. A saída `3`
+indica reconciliação incompleta; trate-a como falha de aprovação.
 
 O servidor executa as migrations ao iniciar. Para validar uma base vazia, use
 `docker compose up -d` e consulte `docker compose logs server`. A repetição da
