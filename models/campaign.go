@@ -650,6 +650,25 @@ func GetCampaigns(uid int64) ([]Campaign, error) {
 	return cs, err
 }
 
+// GetCampaignsForTenant limits the campaign root query to the selected
+// tenant before loading its associated details.
+func GetCampaignsForTenant(tenantID, uid int64) ([]Campaign, error) {
+	cs := []Campaign{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND user_id=?", tenantID, uid).Find(&cs).Error
+	})
+	if err != nil {
+		log.Error(err)
+		return cs, err
+	}
+	for i := range cs {
+		if err := cs[i].getDetails(); err != nil {
+			return cs, err
+		}
+	}
+	return cs, nil
+}
+
 // GetCampaignSummaries gets the summary objects for all the campaigns
 // owned by the current user
 func GetCampaignSummaries(uid int64) (CampaignSummaries, error) {
@@ -676,6 +695,26 @@ func GetCampaignSummaries(uid int64) (CampaignSummaries, error) {
 	return overview, nil
 }
 
+func GetCampaignSummariesForTenant(tenantID, uid int64) (CampaignSummaries, error) {
+	overview := CampaignSummaries{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Table("campaigns").Where("tenant_id=? AND user_id=?", tenantID, uid).
+			Select("id, name, created_date, launch_date, send_by_date, completed_date, status, type").Scan(&overview.Campaigns).Error; err != nil {
+			return err
+		}
+		for i := range overview.Campaigns {
+			stats, err := getCampaignStats(overview.Campaigns[i].Id)
+			if err != nil {
+				return err
+			}
+			overview.Campaigns[i].Stats = stats
+		}
+		overview.Total = int64(len(overview.Campaigns))
+		return nil
+	})
+	return overview, err
+}
+
 // GetCampaignSummary gets the summary object for a campaign specified by the campaign ID
 func GetCampaignSummary(id int64, uid int64) (CampaignSummary, error) {
 	cs := CampaignSummary{}
@@ -693,6 +732,23 @@ func GetCampaignSummary(id int64, uid int64) (CampaignSummary, error) {
 	}
 	cs.Stats = s
 	return cs, nil
+}
+
+func GetCampaignSummaryForTenant(id, tenantID, uid int64) (CampaignSummary, error) {
+	cs := CampaignSummary{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Table("campaigns").Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).
+			Select("id, name, created_date, launch_date, send_by_date, completed_date, status, type").Scan(&cs).Error; err != nil {
+			return err
+		}
+		stats, err := getCampaignStats(cs.Id)
+		if err != nil {
+			return err
+		}
+		cs.Stats = stats
+		return nil
+	})
+	return cs, err
 }
 
 // GetCampaignMailContext returns a campaign object with just the relevant
@@ -774,6 +830,19 @@ func GetCampaign(id int64, uid int64) (Campaign, error) {
 	return c, err
 }
 
+func GetCampaignForTenant(id, tenantID, uid int64) (Campaign, error) {
+	c := Campaign{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).First(&c).Error
+	})
+	if err != nil {
+		log.Errorf("%s: campaign not found", err)
+		return c, err
+	}
+	err = c.getDetails()
+	return c, err
+}
+
 // GetCampaignResults returns just the campaign results for the given campaign
 func GetCampaignResults(id int64, uid int64) (CampaignResults, error) {
 	cr := CampaignResults{}
@@ -795,6 +864,20 @@ func GetCampaignResults(id int64, uid int64) (CampaignResults, error) {
 		log.Errorf("%s: events not found for campaign", err)
 		return cr, err
 	}
+	return cr, err
+}
+
+func GetCampaignResultsForTenant(id, tenantID, uid int64) (CampaignResults, error) {
+	cr := CampaignResults{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Table("campaigns").Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).First(&cr).Error; err != nil {
+			return err
+		}
+		if err := tx.Table("results").Where("campaign_id=? AND user_id=?", cr.Id, uid).Find(&cr.Results).Error; err != nil {
+			return err
+		}
+		return tx.Table("events").Where("campaign_id=?", cr.Id).Find(&cr.Events).Error
+	})
 	return cr, err
 }
 

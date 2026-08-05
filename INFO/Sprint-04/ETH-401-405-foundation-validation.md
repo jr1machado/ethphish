@@ -82,6 +82,17 @@ bloqueio e exclusão usam o tenant na condição de autorização. O teste isola
 tentou ler e bloquear um grupo do tenant A sob o tenant B e ambas as operações
 foram rejeitadas. Resultado: `PASS`.
 
+## Quinto incremento — leituras de campanhas
+
+Listagem, detalhe, resultados e resumos administrativos de campanhas agora
+validam `tenant_id` junto de `user_id` antes de carregar dados associados. Um
+teste PostgreSQL isolado criou uma campanha genérica no tenant A e comprovou
+que `GetCampaignForTenant` sob tenant B não a retorna. Resultado: `PASS`.
+
+A criação, envio, conclusão, links e exclusão de campanhas ainda precisam
+validar, na mesma transação, grupos, templates, páginas e perfis de envio do
+tenant selecionado. Esses fluxos não são marcados como concluídos nesta etapa.
+
 ## Limite atual
 
 O middleware de tenant é aplicado à API e o fluxo de templates já consome o

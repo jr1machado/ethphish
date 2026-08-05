@@ -177,6 +177,20 @@ func TestPostgresTenantFoundation(t *testing.T) {
 	if _, err := models.GetPageForTenant(page.Id, otherTenant.ID, 1); err == nil {
 		t.Fatal("tenant-scoped lookup returned another tenant's page")
 	}
+	campaign := models.Campaign{
+		TenantID: tenant.ID,
+		UserId:   1,
+		Name:     "Tenant generic campaign " + suffix,
+		Type:     "generic",
+		Page:     page,
+		URL:      "https://training.example.test",
+	}
+	if err := models.PostCampaign(&campaign, 1); err != nil {
+		t.Fatalf("creating tenant-scoped generic campaign: %v", err)
+	}
+	if _, err := models.GetCampaignForTenant(campaign.Id, otherTenant.ID, 1); err == nil {
+		t.Fatal("tenant-scoped lookup returned another tenant's campaign")
+	}
 
 	protected := mid.ResolveTenantScope(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scope, err := tenantctx.RequireTenantScope(r)
