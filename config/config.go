@@ -93,6 +93,9 @@ func LoadConfig(filepath string) (*Config, error) {
 	if config.DBRequireTLS && config.DBName == "postgres" && postgresTLSDisabled(config.DBPath) {
 		return nil, fmt.Errorf("PostgreSQL TLS is required but db_path sets sslmode=disable")
 	}
+	if config.DBName != "postgres" {
+		return nil, fmt.Errorf("only PostgreSQL is supported by the server runtime; configure ETHPHISH_DB_DRIVER=postgres")
+	}
 	// Choosing the migrations directory based on the database used.
 	config.MigrationsPath = config.MigrationsPath + config.DBName
 	// Explicitly set the TestFlag to false to prevent config.json overrides

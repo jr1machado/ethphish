@@ -1,8 +1,8 @@
-# Arquitetura alvo e operação — v0.1.0
+# Arquitetura alvo e operação — EthPhish v0.2.0
 
 ## Escopo desta arquitetura
 
-O EthPhish separa claramente o estado atual da arquitetura-alvo. A v0.1.0 é um
+O EthPhish separa claramente o estado atual da arquitetura-alvo. A v0.2.0 é um
 monólito modular seguro para desenvolvimento, com PostgreSQL e broker
 provisionados. A distribuição real de workers é futura e não deve ser assumida
 como pronta apenas porque RabbitMQ está no Compose.

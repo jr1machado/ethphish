@@ -27,9 +27,10 @@ RUN apt-get update \
     && useradd --system --uid 10001 --gid ethphish --home-dir /opt/ethphish ethphish
 
 WORKDIR /opt/ethphish
+ENV ETHPHISH_RUNTIME_ENV=production
 COPY --from=backend /out/ethphish ./ethphish
 COPY --from=backend /src/config.json /src/VERSION /src/ANGLERPHISH_VERSION /src/LICENSE ./
-COPY --from=backend /src/db ./db
+COPY --from=backend /src/db/db_postgres ./db/db_postgres
 COPY --from=backend /src/templates ./templates
 COPY --from=backend /src/reports/python/requirements.txt ./reports/python/requirements.txt
 COPY --from=backend /src/static ./static

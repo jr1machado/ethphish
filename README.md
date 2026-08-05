@@ -1,4 +1,4 @@
-# EthPhish v0.1.0
+# EthPhish v0.2.0
 
 EthPhish é um fork independente do Anglerphish 1.3.0, evoluído como uma
 plataforma corporativa completa para testes éticos, autorizados e mensuráveis
@@ -67,7 +67,7 @@ e não armazena senhas, OTPs ou outras credenciais reais.
  internet ── HTTPS 443 ── Caddy ── TLS interno ── web de campanhas/quishing
 ```
 
-Na v0.1.0, scheduler, mailer e workers são componentes internos do processo do
+Na v0.2.0, scheduler, mailer e workers são componentes internos do processo do
 servidor central; não existe uma porta de comunicação central-worker. A
 separação em nodes é a arquitetura-alvo: workers sem acesso administrativo nem
 ao PostgreSQL consumirão jobs assinados de RabbitMQ, em rede privada, por AMQP
@@ -86,7 +86,7 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
 | `tls-init` | prepara volume privado de certificados | nenhuma | execução única, sem rede |
 | `worker-node` (futuro) | entrega aprovada e observabilidade | AMQP TLS 5671 de saída; SMTP/HTTPS conforme escopo | sem painel e sem banco direto |
 
-## Recursos implementados na v0.1.0
+## Recursos implementados na v0.2.0
 
 - campanhas legadas por e-mail, SMS, QR Code e canal genérico, sempre sob uso
   autorizado;
@@ -100,6 +100,10 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
 - TLS de desenvolvimento e configuração de TLS obrigatório para PostgreSQL
   quando `ETHPHISH_DB_REQUIRE_TLS=true`;
 - backups lógicos e restore ensaiado em banco isolado;
+- runtime e imagem PostgreSQL-only, migrations sem Goose/CGO e importação
+  SQLite→PostgreSQL com pré-flight, transação e reconciliação por contagem;
+- paridade PostgreSQL para campanhas, SMS, IMAP persistido, criptografia,
+  webhooks e transições de relatórios, sem chamadas externas nos testes;
 - CI/CD e controles de supply chain descritos em [release notes](RELEASE_NOTES.md).
 
 ## Próximas capacidades
@@ -130,6 +134,10 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
 - Docker Engine com Compose v2;
 - Node 22 para reconstrução de assets;
 - PostgreSQL 17 para o ambiente Compose.
+
+O runtime de produção exige PostgreSQL. SQLite permanece somente para testes e
+migração legada explicitamente controlada; não inicie uma imagem de produção
+com `ETHPHISH_DB_DRIVER=sqlite3`.
 
 Referência de capacidade inicial: servidor central com 2 vCPU, 4 GB RAM e
 100 GB de disco; cada worker futuro com 1 vCPU, 1 GB RAM e 50 GB de disco. A
@@ -164,7 +172,8 @@ Consulte [desenvolvimento local](docs/runbooks/local-development.md),
 - [Threat model](docs/security/threat-model.md)
 - [Uso aceitável](docs/product/acceptable-use.md)
 - [Status das Sprints 0–2](docs/project/sprint-0-2-status.md)
-- [Release notes v0.1.0](RELEASE_NOTES.md)
+- [Sprint 02 — endurecimento PostgreSQL](docs/project/sprint-02.md)
+- [Release notes v0.2.0](RELEASE_NOTES.md)
 - [Issues conhecidos](ISSUES_CONHECIDOS.md)
 
 ## Licença e atribuição

@@ -23,6 +23,7 @@ services:
     build:
       context: .
     environment:
+      ETHPHISH_RUNTIME_ENV: production
       ETHPHISH_ADMIN_LISTEN_URL: 0.0.0.0:3333
       ETHPHISH_ADMIN_USE_TLS: "true"
       ETHPHISH_ADMIN_CERT_PATH: /var/lib/ethphish/tls/admin.crt

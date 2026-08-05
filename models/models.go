@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -11,16 +12,14 @@ import (
 	"os"
 	"time"
 
-	"bitbucket.org/liamstask/goose/lib/goose"
-
 	mysql "github.com/go-sql-driver/mysql"
 	"github.com/gophish/gophish/auth"
 	"github.com/gophish/gophish/config"
+	dbmigration "github.com/gophish/gophish/migration"
 
 	log "github.com/gophish/gophish/logger"
 	"github.com/jinzhu/gorm"
-	_ "github.com/lib/pq"           // Blank import needed to import PostgreSQL
-	_ "github.com/mattn/go-sqlite3" // Blank import needed to import sqlite3
+	_ "github.com/lib/pq" // Blank import needed to import PostgreSQL
 )
 
 var db *gorm.DB
@@ -98,26 +97,6 @@ func generateSecureKey() string {
 	return fmt.Sprintf("%x", k)
 }
 
-func chooseDBDriver(name, openStr string) goose.DBDriver {
-	d := goose.DBDriver{Name: name, OpenStr: openStr}
-
-	switch name {
-	case "postgres":
-		d.Import = "github.com/lib/pq"
-		d.Dialect = &goose.PostgresDialect{}
-	case "mysql":
-		d.Import = "github.com/go-sql-driver/mysql"
-		d.Dialect = &goose.MySqlDialect{}
-
-	// Default database is sqlite3
-	default:
-		d.Import = "github.com/mattn/go-sqlite3"
-		d.Dialect = &goose.Sqlite3Dialect{}
-	}
-
-	return d
-}
-
 func createTemporaryPassword(u *User) error {
 	var temporaryPassword string
 	if envPassword := os.Getenv(InitialAdminPassword); envPassword != "" {
@@ -153,14 +132,8 @@ func createTemporaryPassword(u *User) error {
 func Setup(c *config.Config) error {
 	// Setup the package-scoped config
 	conf = c
-	// Setup the goose configuration
-	migrateConf := &goose.DBConf{
-		MigrationsDir: conf.MigrationsPath,
-		Env:           "production",
-		Driver:        chooseDBDriver(conf.DBName, conf.DBPath),
-	}
 	// Get the latest possible migration
-	latest, err := goose.GetMostRecentDBVersion(migrateConf.MigrationsDir)
+	latest, err := dbmigration.Latest(conf.MigrationsPath)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -211,7 +184,7 @@ func Setup(c *config.Config) error {
 		return err
 	}
 	// Migrate up to the latest version
-	err = runMigrations(conf.DBName, migrateConf, latest, db.DB())
+	err = runMigrations(conf.DBName, conf.MigrationsPath, latest, db.DB())
 	if err != nil {
 		log.Error(err)
 		return err
@@ -279,9 +252,9 @@ func Setup(c *config.Config) error {
 	return nil
 }
 
-func runMigrations(driver string, migrateConf *goose.DBConf, latest int64, database *sql.DB) error {
+func runMigrations(driver, migrationsPath string, latest int64, database *sql.DB) error {
 	if driver != "postgres" {
-		return goose.RunMigrationsOnDb(migrateConf, migrateConf.MigrationsDir, latest, database)
+		return dbmigration.Apply(context.Background(), driver, migrationsPath, latest, database)
 	}
 
 	// An advisory lock makes concurrent starts wait for the migration owner.
@@ -297,7 +270,7 @@ func runMigrations(driver string, migrateConf *goose.DBConf, latest int64, datab
 			log.Errorf("releasing PostgreSQL migration lock: %v", err)
 		}
 	}()
-	return goose.RunMigrationsOnDb(migrateConf, migrateConf.MigrationsDir, latest, database)
+	return dbmigration.Apply(context.Background(), driver, migrationsPath, latest, database)
 }
 
 func configureConnectionPool(database *sql.DB, config *config.Config) {
