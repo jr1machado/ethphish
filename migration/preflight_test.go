@@ -3,6 +3,7 @@ package migration
 import (
 	"context"
 	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -36,6 +37,41 @@ func TestOpenSQLiteReadOnly(t *testing.T) {
 	}
 	if _, err := readonly.Exec(`INSERT INTO campaigns VALUES (2)`); err == nil {
 		t.Fatal("read-only source accepted a write")
+	}
+}
+
+func TestApplyTracksAndDoesNotReapplyMigrations(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "20260805000001_create_test_table.sql")
+	contents := "-- +goose Up\nCREATE TABLE migration_runner_test (id INTEGER PRIMARY KEY);\n-- +goose Down\nDROP TABLE migration_runner_test;\n"
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	database, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	latest, err := Latest(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(context.Background(), "sqlite3", directory, latest, database); err != nil {
+		t.Fatal(err)
+	}
+	if err := Apply(context.Background(), "sqlite3", directory, latest, database); err != nil {
+		t.Fatalf("reapplying migrations: %v", err)
+	}
+	var version int64
+	var tableCount int
+	if err := database.QueryRow(`SELECT version_id FROM goose_db_version WHERE is_applied = true ORDER BY id DESC LIMIT 1`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'migration_runner_test'`).Scan(&tableCount); err != nil {
+		t.Fatal(err)
+	}
+	if version != latest || tableCount != 1 {
+		t.Fatalf("migration state = version %d, table count %d; want version %d and table count 1", version, tableCount, latest)
 	}
 }
 
