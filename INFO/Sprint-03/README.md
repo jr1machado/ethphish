@@ -6,16 +6,16 @@ resultado ser registrado em arquivo versionado ou no CI vinculado ao commit.
 
 | ID | Evidência exigida | Estado atual |
 | --- | --- | --- |
-| ETH-301 | migrations PostgreSQL e build sem CGO | em validação pelo CI do commit `05b640b` |
-| ETH-302 | campanhas e resultados em PostgreSQL | teste de integração existente; ampliar reconciliação |
-| ETH-303 | templates e landing pages em PostgreSQL | coberto pelo teste de campanha; evidência dedicada pendente |
-| ETH-304 | SMTP, SMS e IMAP em PostgreSQL | SMS coberto; SMTP/IMAP pendentes |
-| ETH-305 | criptografia com chave correta/incorreta | pendente |
+| ETH-301 | migrations PostgreSQL e build sem CGO | aprovado no CI `31048677388` |
+| ETH-302 | campanhas e resultados em PostgreSQL | aprovado; `paridade-operacional-2026-08-05.md` |
+| ETH-303 | templates e landing pages em PostgreSQL | aprovado; `paridade-operacional-2026-08-05.md` |
+| ETH-304 | SMTP, SMS e IMAP em PostgreSQL | aprovado; `paridade-operacional-2026-08-05.md` |
+| ETH-305 | criptografia com chave correta/incorreta | aprovado; `paridade-operacional-2026-08-05.md` |
 | ETH-306 | importação SQLite → PostgreSQL | aprovada no CI; `importacao-reconciliacao-2026-08-05.md` |
 | ETH-307 | contagens, hashes, órfãos e referências | contagens pós-importação aprovadas; hashes/órfãos pendentes |
 | ETH-308 | backup PostgreSQL | ensaio registrado em `restore-isolado-2026-08-05.md` |
 | ETH-309 | restore em banco isolado | aprovado no banco descartável; evidência registrada |
-| ETH-310 | imagem sem SQLite/CGO | build local sem CGO aprovado; validar CI do commit `05b640b` |
+| ETH-310 | imagem sem SQLite/CGO | aprovado no CI `31048677388` e build local sem CGO |
 
 ## Comandos de verificação
 
