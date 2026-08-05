@@ -119,3 +119,64 @@ func TestPostgresCampaignPersistence(t *testing.T) {
 		t.Fatalf("mail log count = %d, want 1", len(mailLogs))
 	}
 }
+
+// TestPostgresSMSCampaignPersistence covers the SMS persistence path without
+// creating a network client or attempting delivery.
+func TestPostgresSMSCampaignPersistence(t *testing.T) {
+	setupPostgres(t)
+
+	group := models.Group{
+		Name:   "PostgreSQL SMS integration group",
+		UserId: 1,
+		Targets: []models.Target{
+			{BaseRecipient: models.BaseRecipient{Email: "participant@example.test", Phone: "+15551234567"}},
+		},
+	}
+	if err := models.PostGroup(&group); err != nil {
+		t.Fatalf("creating SMS target group: %v", err)
+	}
+	template := models.SMSTemplate{Name: "PostgreSQL SMS template", Text: "Authorized training", UserId: 1}
+	if err := models.PostSMSTemplate(&template); err != nil {
+		t.Fatalf("creating SMS template: %v", err)
+	}
+	page := models.Page{Name: "PostgreSQL SMS page", HTML: "<html>Training</html>", UserId: 1}
+	if err := models.PostPage(&page); err != nil {
+		t.Fatalf("creating SMS landing page: %v", err)
+	}
+	profile := models.SMS{
+		Name:           "PostgreSQL SMS profile",
+		Provider:       "twilio",
+		From:           "+15557654321",
+		ProviderConfig: `{"account_sid":"integration","auth_token":"integration"}`,
+		UserId:         1,
+	}
+	if err := models.PostSMS(&profile); err != nil {
+		t.Fatalf("creating SMS profile: %v", err)
+	}
+	campaign := models.Campaign{
+		Name:        "PostgreSQL SMS campaign",
+		UserId:      1,
+		Type:        "sms",
+		SMSTemplate: template,
+		Page:        page,
+		SMS:         profile,
+		Groups:      []models.Group{group},
+	}
+	if err := models.PostCampaign(&campaign, campaign.UserId); err != nil {
+		t.Fatalf("persisting SMS campaign: %v", err)
+	}
+	stored, err := models.GetCampaign(campaign.Id, campaign.UserId)
+	if err != nil {
+		t.Fatalf("reading SMS campaign: %v", err)
+	}
+	if stored.Type != "sms" || len(stored.Results) != 1 {
+		t.Fatalf("stored SMS campaign has type %q and %d results; want sms and 1", stored.Type, len(stored.Results))
+	}
+	logs, err := models.GetSMSLogsByCampaign(campaign.Id)
+	if err != nil {
+		t.Fatalf("reading SMS campaign logs: %v", err)
+	}
+	if len(logs) != 1 {
+		t.Fatalf("SMS log count = %d, want 1", len(logs))
+	}
+}
