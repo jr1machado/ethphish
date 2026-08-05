@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"html/template"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -116,7 +117,7 @@ func (as *AdminServer) Start() {
 	if as.config.UseTLS {
 		// Only support TLS 1.2 and above - ref #1691, #1689
 		as.server.TLSConfig = defaultTLSConfig
-		err := util.CheckAndCreateSSL(as.config.CertPath, as.config.KeyPath)
+		err := util.CheckAndCreateSSLForHosts(as.config.CertPath, as.config.KeyPath, tlsCertificateHosts(as.config.ListenURL)...)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -126,6 +127,19 @@ func (as *AdminServer) Start() {
 	// If TLS isn't configured, just listen on HTTP
 	log.Infof("Starting admin server at http://%s", as.config.ListenURL)
 	log.Fatal(as.server.ListenAndServe())
+}
+
+func tlsCertificateHosts(listenURL string) []string {
+	host, _, err := net.SplitHostPort(listenURL)
+	if err != nil {
+		host = listenURL
+	}
+	// localhost keeps the development certificate useful for direct local
+	// diagnostics even when the process binds to all interfaces.
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		return []string{"localhost", host}
+	}
+	return []string{host, "localhost"}
 }
 
 // Shutdown attempts to gracefully shutdown the server.
@@ -142,6 +156,24 @@ func (as *AdminServer) Shutdown() error {
 // This function returns an http.Handler to be used in http.ListenAndServe().
 func (as *AdminServer) registerRoutes() {
 	router := mux.NewRouter()
+	// Liveness is intentionally unauthenticated so container orchestrators can
+	// verify the process without receiving an administrative credential.
+	router.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}).Methods(http.MethodGet)
+	// Readiness includes the database dependency and is intentionally distinct
+	// from the process liveness endpoint above.
+	router.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		if err := models.Ping(); err != nil {
+			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ready"}`))
+	}).Methods(http.MethodGet)
 	// Base Front-end routes
 	router.HandleFunc("/", mid.Use(as.Base, mid.RequireLogin))
 	router.HandleFunc("/login", mid.Use(as.Login, as.limiter.Limit))

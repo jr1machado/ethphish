@@ -1,45 +1,46 @@
-# Minify client side assets (JavaScript)
-FROM node:latest AS build-js
+# syntax=docker/dockerfile:1.7
+FROM node:22.18.0-bookworm-slim AS frontend
+WORKDIR /src
+COPY package.json yarn.lock gulpfile.js webpack.config.js .babelrc ./
+RUN corepack enable && yarn install --frozen-lockfile
+COPY static ./static
+RUN yarn gulp
 
-RUN npm install gulp gulp-cli -g
-
-WORKDIR /build
+FROM golang:1.24.5-bookworm AS backend
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
-RUN npm install --only=dev
-RUN gulp
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/ethphish .
 
+FROM backend AS test
+ARG TEST_PACKAGES=./...
+RUN test -z "$(gofmt -l .)" \
+    && go vet ./... \
+    && go test ${TEST_PACKAGES}
 
-# Build Golang binary
-FROM golang:1.24 AS build-golang
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y ca-certificates python3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 ethphish \
+    && useradd --system --uid 10001 --gid ethphish --home-dir /opt/ethphish ethphish
 
-WORKDIR /go/src/github.com/gophish/gophish
-COPY . .
-RUN go get -v && go build -v
+WORKDIR /opt/ethphish
+COPY --from=backend /out/ethphish ./ethphish
+COPY --from=backend /src/config.json /src/VERSION /src/ANGLERPHISH_VERSION /src/LICENSE ./
+COPY --from=backend /src/db ./db
+COPY --from=backend /src/templates ./templates
+COPY --from=backend /src/reports/python/requirements.txt ./reports/python/requirements.txt
+COPY --from=backend /src/static ./static
+COPY --from=frontend /src/static/js/dist ./static/js/dist
+COPY --from=frontend /src/static/css/dist ./static/css/dist
+RUN mkdir -p /var/lib/ethphish/reports \
+    && chown -R ethphish:ethphish /opt/ethphish /var/lib/ethphish
 
-
-# Runtime container
-FROM debian:stable-slim
-
-RUN useradd -m -d /opt/gophish -s /bin/bash app
-
-RUN apt-get update && \
-	apt-get install --no-install-recommends -y jq libcap2-bin ca-certificates && \
-	apt-get clean && \
-	rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-WORKDIR /opt/gophish
-COPY --from=build-golang /go/src/github.com/gophish/gophish/ ./
-COPY --from=build-js /build/static/js/dist/ ./static/js/dist/
-COPY --from=build-js /build/static/css/dist/ ./static/css/dist/
-COPY --from=build-golang /go/src/github.com/gophish/gophish/config.json ./
-RUN chown app. config.json
-
-RUN setcap 'cap_net_bind_service=+ep' /opt/gophish/gophish
-
-USER app
-RUN sed -i 's/127.0.0.1/0.0.0.0/g' config.json
-RUN touch config.json.tmp
-
-EXPOSE 3333 8080 8443 80
-
-CMD ["./docker/run.sh"]
+USER 10001:10001
+EXPOSE 3333 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD python3 -c "import ssl, urllib.request; urllib.request.urlopen('https://127.0.0.1:3333/healthz', context=ssl._create_unverified_context(), timeout=2).read()"
+ENTRYPOINT ["/opt/ethphish/ethphish"]
+CMD ["--config", "/opt/ethphish/config.json"]

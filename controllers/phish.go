@@ -100,7 +100,7 @@ func (ps *PhishingServer) Start() {
 	if ps.config.UseTLS {
 		// Only support TLS 1.2 and above - ref #1691, #1689
 		ps.server.TLSConfig = defaultTLSConfig
-		err := util.CheckAndCreateSSL(ps.config.CertPath, ps.config.KeyPath)
+		err := util.CheckAndCreateSSLForHosts(ps.config.CertPath, ps.config.KeyPath, tlsCertificateHosts(ps.config.ListenURL)...)
 		if err != nil {
 			log.Fatal(err)
 		}

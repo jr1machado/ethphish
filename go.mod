@@ -20,6 +20,7 @@ require (
 	github.com/jinzhu/gorm v1.9.12
 	github.com/jordan-wright/email v4.0.1-0.20200824153738-3f5bafa1cd84+incompatible
 	github.com/jordan-wright/unindexed v0.0.0-20181209214434-78fa79113c0f
+	github.com/lib/pq v1.1.1
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/oschwald/maxminddb-golang v1.6.0
@@ -53,7 +54,6 @@ require (
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/kylelemons/go-gypsy v0.0.0-20160905020020-08cad365cd28 // indirect
-	github.com/lib/pq v1.1.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect

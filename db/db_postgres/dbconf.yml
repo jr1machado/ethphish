@@ -1,0 +1,5 @@
+production:
+    driver: postgres 
+    open: host=postgres port=5432 user=ethphish password=development-only-change-me dbname=ethphish sslmode=disable
+    dialect: postgres
+    import: github.com/lib/pq

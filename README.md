@@ -1,10 +1,13 @@
-![Anglerphish logo](static/images/gophish_purple.png)
+![EthPhish logo](static/images/gophish_purple.png)
 
 <div align="center">
-<h1>Anglerphish</h1>
+<h1>EthPhish</h1>
 </div>
 
-Anglerphish is an enhanced, feature-rich fork of [Gophish](https://github.com/gophish/gophish) aimed at providing more flexible campaign management, expanded phishing vectors, improved reporting capabilities, and numerous quality‑of‑life enhancements.
+EthPhish é um fork corporativo do Anglerphish 1.3.0 destinado exclusivamente a
+simulações éticas, autorizadas e mensuráveis de conscientização. O baseline
+herdado permanece rastreável, enquanto a evolução do produto prioriza
+segregação multitenant, privacidade e operação segura.
 
 See also the Medium [article](https://medium.com/@gpetro/anglerphish-6dc3e5520242).
 
@@ -60,14 +63,17 @@ Installation of Anglerphish remains dead-simple - just download and extract the 
 
 ### Building From Source
 
-To build Anglerphish from source, simply run ```git clone https://github.com/geopetro/anglerphish.git``` and ```cd``` into the project source directory. Then, run ```go build```. After this, you should have a binary called ```gophish``` in the current directory.
+Para compilar o EthPhish, instale Go 1.24.5 e um compilador C, então execute
+`CGO_ENABLED=1 go build -o ethphish .`. Consulte o runbook de desenvolvimento
+local para os pré-requisitos e a execução via Docker Compose.
 
 ### Setup
-After running the Gophish binary, open an Internet browser to https://localhost:3333 and login with the default username and password listed in the log output.
-e.g.
-```
-time="2020-07-29T01:24:08Z" level=info msg="Please login with the username admin and the password 4304d5255378177d"
-```
+No ambiente local, inicie com `docker compose up -d` e acesse a superfície web
+em `https://localhost:9443`. O painel administrativo não é publicado no host.
+Na primeira execução, a credencial administrativa temporária é gerada de forma
+aleatória e registrada apenas nos logs do servidor local; altere-a no primeiro
+acesso. Consulte o runbook de desenvolvimento local para a configuração e a
+recuperação PostgreSQL.
 
 ### Documentation
 

@@ -75,6 +75,42 @@ func TestLoginCSRF(t *testing.T) {
 	}
 }
 
+func TestHealthzIsAvailableWithoutAuthentication(t *testing.T) {
+	ctx := setupTest(t)
+	defer tearDown(t, ctx)
+
+	resp, err := http.Get(fmt.Sprintf("%s/healthz", ctx.adminServer.URL))
+	if err != nil {
+		t.Fatalf("requesting health check: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected health check status 200, got %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading health check response: %v", err)
+	}
+	if strings.TrimSpace(string(body)) != `{"status":"ok"}` {
+		t.Fatalf("unexpected health check response: %q", body)
+	}
+}
+
+func TestReadyzReportsDatabaseReadiness(t *testing.T) {
+	ctx := setupTest(t)
+	defer tearDown(t, ctx)
+
+	resp, err := http.Get(fmt.Sprintf("%s/readyz", ctx.adminServer.URL))
+	if err != nil {
+		t.Fatalf("requesting readiness check: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected readiness status 200, got %d", resp.StatusCode)
+	}
+}
+
 func TestInvalidCredentials(t *testing.T) {
 	ctx := setupTest(t)
 	defer tearDown(t, ctx)
