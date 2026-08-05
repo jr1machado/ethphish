@@ -146,6 +146,24 @@ func TestPostgresTenantFoundation(t *testing.T) {
 	if _, err := models.GetTemplateForTenant(otherTemplate.Id, tenant.ID, 1); err == nil {
 		t.Fatal("tenant-scoped lookup returned another tenant's template")
 	}
+	group := models.Group{
+		TenantID: tenant.ID,
+		UserId:   1,
+		Name:     "Tenant group " + suffix,
+		Targets:  []models.Target{{BaseRecipient: models.BaseRecipient{Email: "tenant-" + suffix + "@example.test"}}},
+	}
+	if err := models.PostGroupForTenant(&group, tenant.ID); err != nil {
+		t.Fatalf("creating tenant-scoped group: %v", err)
+	}
+	groups, err := models.GetGroupsForTenant(otherTenant.ID, 1)
+	if err != nil {
+		t.Fatalf("listing groups for second tenant: %v", err)
+	}
+	for _, storedGroup := range groups {
+		if storedGroup.Id == group.Id {
+			t.Fatal("tenant-scoped group list returned another tenant's group")
+		}
+	}
 	page := models.Page{TenantID: tenant.ID, UserId: 1, Name: "Tenant page " + suffix, HTML: "<p>Training</p>"}
 	if err := models.PostPageForTenant(&page, tenant.ID); err != nil {
 		t.Fatalf("creating tenant-scoped page: %v", err)

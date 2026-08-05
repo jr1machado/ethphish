@@ -68,6 +68,18 @@ PostgreSQL isolado, uma página criada no tenant A não foi retornada quando a
 consulta usou o tenant B. Resultado: `PASS`; os dois logs `record not found`
 correspondem às verificações negativas de template e página.
 
+## Quarto incremento — grupos e alvos
+
+`targets` recebeu `tenant_id`, impedindo a reutilização de um alvo de outro
+tenant durante a criação de grupos. A listagem e a criação de grupos na API
+passaram a usar `TenantScope` e transação tenant-bound. No PostgreSQL isolado,
+um grupo com alvo criado no tenant A não foi retornado pela listagem do tenant
+B. Resultado: `PASS`.
+
+As operações de detalhe, edição, bloqueio e exclusão de grupos permanecem no
+próximo incremento; elas ainda não devem ser consideradas fluxo multitenant
+concluído.
+
 ## Limite atual
 
 O middleware de tenant é aplicado à API e o fluxo de templates já consome o

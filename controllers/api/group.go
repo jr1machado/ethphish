@@ -16,9 +16,15 @@ import (
 // Groups returns a list of groups if requested via GET.
 // If requested via POST, APIGroups creates a new group and returns a reference to it.
 func (as *Server) Groups(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
+	userID := ctx.Get(r, "user_id").(int64)
 	switch {
 	case r.Method == "GET":
-		gs, err := models.GetGroups(ctx.Get(r, "user_id").(int64))
+		gs, err := models.GetGroupsForTenant(scope.TenantID, userID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "No groups found"}, http.StatusNotFound)
 			return
@@ -33,14 +39,15 @@ func (as *Server) Groups(w http.ResponseWriter, r *http.Request) {
 			JSONResponse(w, models.Response{Success: false, Message: "Invalid JSON structure"}, http.StatusBadRequest)
 			return
 		}
-		_, err = models.GetGroupByName(g.Name, ctx.Get(r, "user_id").(int64))
+		_, err = models.GetGroupByNameForTenant(g.Name, scope.TenantID, userID)
 		if err != gorm.ErrRecordNotFound {
 			JSONResponse(w, models.Response{Success: false, Message: "Group name already in use"}, http.StatusConflict)
 			return
 		}
 		g.ModifiedDate = time.Now().UTC()
-		g.UserId = ctx.Get(r, "user_id").(int64)
-		err = models.PostGroup(&g)
+		g.UserId = userID
+		g.TenantID = scope.TenantID
+		err = models.PostGroupForTenant(&g, scope.TenantID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusBadRequest)
 			return

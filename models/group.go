@@ -51,7 +51,8 @@ type GroupTarget struct {
 // Target contains the fields needed for individual targets specified by the user
 // Groups contain 1..* Targets, but 1 Target may belong to 1..* Groups
 type Target struct {
-	Id int64 `json:"-"`
+	Id       int64 `json:"-"`
+	TenantID int64 `json:"-" gorm:"column:tenant_id;default:1"`
 	BaseRecipient
 }
 
@@ -127,6 +128,60 @@ func GetGroups(uid int64) ([]Group, error) {
 		}
 	}
 	return gs, nil
+}
+
+// GetGroupsForTenant returns only the groups and targets belonging to the
+// selected tenant. Targets are filtered independently as a defence in depth
+// measure while the group-target relation is migrated.
+func GetGroupsForTenant(tenantID, uid int64) ([]Group, error) {
+	gs := []Group{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND user_id=?", tenantID, uid).Find(&gs).Error; err != nil {
+			return err
+		}
+		for i := range gs {
+			targets, err := getTargetsForTenant(tx, gs[i].Id, tenantID)
+			if err != nil {
+				return err
+			}
+			gs[i].Targets = targets
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return gs, err
+}
+
+func getTargetsForTenant(tx *gorm.DB, groupID, tenantID int64) ([]Target, error) {
+	ts := []Target{}
+	err := tx.Table("targets").
+		Select("targets.id, targets.tenant_id, targets.email, targets.phone, targets.first_name, targets.last_name, targets.position, targets.custom").
+		Joins("JOIN group_targets gt ON targets.id = gt.target_id").
+		Where("gt.group_id=? AND targets.tenant_id=?", groupID, tenantID).
+		Scan(&ts).Error
+	return ts, err
+}
+
+// GetGroupByNameForTenant scopes duplicate-name validation to a tenant.
+func GetGroupByNameForTenant(name string, tenantID, uid int64) (Group, error) {
+	g := Group{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND user_id=? AND name=?", tenantID, uid, name).First(&g).Error; err != nil {
+			return err
+		}
+		targets, err := getTargetsForTenant(tx, g.Id, tenantID)
+		if err != nil {
+			return err
+		}
+		g.Targets = targets
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return g, err
 }
 
 // GetGroupSummaries returns the summaries for the groups
@@ -282,6 +337,27 @@ func PostGroup(g *Group) error {
 		return err
 	}
 	return nil
+}
+
+// PostGroupForTenant creates the group and its targets in a tenant-bound
+// transaction. Target reuse is limited to the same tenant.
+func PostGroupForTenant(g *Group, tenantID int64) error {
+	if err := g.Validate(); err != nil {
+		return err
+	}
+	g.TenantID = tenantID
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Save(g).Error; err != nil {
+			return err
+		}
+		for _, target := range g.Targets {
+			target.TenantID = tenantID
+			if err := insertTargetIntoGroup(tx, target, g.Id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // PutGroup updates the given group if found in the database.
@@ -463,6 +539,9 @@ func DeleteGroup(g *Group) error {
 var ErrNoContactInfoSpecified = errors.New("Either email or phone must be specified")
 
 func insertTargetIntoGroup(tx *gorm.DB, t Target, gid int64) error {
+	if t.TenantID == 0 {
+		t.TenantID = 1
+	}
 	// Check if either email or phone is provided
 	if t.Email == "" && t.Phone == "" {
 		return ErrNoContactInfoSpecified
@@ -505,20 +584,20 @@ func insertTargetIntoGroup(tx *gorm.DB, t Target, gid int64) error {
 	// Build a query that can find targets by either email or phone or both
 	if t.Email != "" && t.Phone != "" {
 		// If both email and phone are provided, check for either match
-		query = query.Where("email = ? OR phone = ?", t.Email, t.Phone)
+		query = query.Where("tenant_id = ? AND (email = ? OR phone = ?)", t.TenantID, t.Email, t.Phone)
 		log.WithFields(logrus.Fields{
 			"email": t.Email,
 			"phone": t.Phone,
 		}).Debug("Searching for target by both email and phone")
 	} else if t.Email != "" {
 		// If only email is provided
-		query = query.Where("email = ?", t.Email)
+		query = query.Where("tenant_id = ? AND email = ?", t.TenantID, t.Email)
 		log.WithFields(logrus.Fields{
 			"email": t.Email,
 		}).Debug("Searching for target by email")
 	} else if t.Phone != "" {
 		// If only phone is provided
-		query = query.Where("phone = ?", t.Phone)
+		query = query.Where("tenant_id = ? AND phone = ?", t.TenantID, t.Phone)
 		log.WithFields(logrus.Fields{
 			"phone": t.Phone,
 		}).Debug("Searching for target by phone")
