@@ -1,132 +1,174 @@
-![EthPhish logo](static/images/gophish_purple.png)
+# EthPhish v0.1.0
 
-<div align="center">
-<h1>EthPhish</h1>
-</div>
+EthPhish é um fork independente do Anglerphish 1.3.0, evoluído como uma
+plataforma corporativa completa para testes éticos, autorizados e mensuráveis
+de phishing e quishing (simulações via QR Code). Não é uma distribuição nem um
+produto oficial do Anglerphish ou do Gophish.
 
-EthPhish é um fork corporativo do Anglerphish 1.3.0 destinado exclusivamente a
-simulações éticas, autorizadas e mensuráveis de conscientização. O baseline
-herdado permanece rastreável, enquanto a evolução do produto prioriza
-segregação multitenant, privacidade e operação segura.
+O produto apoia programas de conscientização, GRC e redução de risco humano.
+Toda campanha deve possuir autorização, escopo, período, público e domínios
+aprovados. O EthPhish não contempla evasão de controles, coleta de credenciais
+reais, payloads, exploração de vulnerabilidades ou uso não autorizado.
 
-See also the Medium [article](https://medium.com/@gpetro/anglerphish-6dc3e5520242).
+## Visão comercial
 
----
+Para C-levels e executivos, o EthPhish converte o risco humano em evidência
+operacional: mostra onde a organização é mais suscetível a engenharia social,
+mede a evolução após treinamentos e dá governança sobre campanhas de
+conscientização. Casos de uso incluem programas recorrentes de awareness,
+validação de controles antes de auditorias, avaliação de risco por área,
+simulações aprovadas após incidentes e prestação de serviços gerenciados para
+múltiplos clientes.
 
-## Table of Contents
+As dores endereçadas são a falta de métricas consistentes de comportamento,
+campanhas sem controle de escopo, relatórios manuais, baixa rastreabilidade de
+aprovações e ausência de uma base evolutiva para segmentação multitenant. A
+plataforma preserva as fronteiras éticas: mede eventos de interação autorizados
+e não armazena senhas, OTPs ou outras credenciais reais.
 
-- [Table of Contents](#table-of-contents)
-- [Features and Enhancements](#features-and-enhancements)
-- [Visual Previews](#visual-previews)
-- [Contributors](#contributors)
-- [A fork based on original Gophish v0.12.1:](#a-fork-based-on-original-gophish-v0121)
-  - [Gophish: Open-Source Phishing Toolkit](#gophish-open-source-phishing-toolkit)
-  - [Install](#install)
-  - [Building From Source](#building-from-source)
-  - [Setup](#setup)
-  - [Documentation](#documentation)
-  - [Issues](#issues)
-  - [License](#license)
+## O que mudou neste fork
 
----
+- identidade, versionamento e documentação próprios do EthPhish;
+- PostgreSQL como banco de desenvolvimento e base de produção planejada;
+- migrations PostgreSQL, pool configurável e lock de concorrência;
+- configuração por variáveis de ambiente, sem editar `config.json` em runtime;
+- Docker multi-stage, usuário não-root, capabilities removidas e health checks;
+- TLS autoassinado para desenvolvimento, Caddy e painel administrativo sem
+  publicação direta no host;
+- CI com formatação, vet, testes, integração PostgreSQL, secret scan,
+  vulnerabilidades, scan de imagem e SBOM;
+- backup PostgreSQL, restore ensaiado e documentação de segurança, arquitetura
+  e governança.
 
-## Features and Enhancements
+## Arquitetura
 
-See [FEATURES.md](FEATURES.md) for the full list of features and enhancements.
+```text
+                         rede administrativa privada
+                                      │
+                          VPN / Zero Trust / OIDC
+                                      │
+                           ┌──────────▼──────────┐
+                           │ servidor central    │
+                           │ administração/API   │
+                           │ scheduler e jobs    │
+                           └───────┬───────┬─────┘
+                                   │       │
+                         PostgreSQL│       │AMQP (futuro)
+                                   │       ▼
+                              ┌────▼───┐ ┌───────────────┐
+                              │ dados  │ │ RabbitMQ       │
+                              └────────┘ └───┬─────┬─────┘
+                                               │     │
+                                      ┌────────▼┐ ┌──▼─────────┐
+                                      │ worker  │ │ worker     │
+                                      │ node 1  │ │ node N     │
+                                      └─────────┘ └────────────┘
 
-For the latest changes check out [CHANGELOG.md](CHANGELOG.md).
-
-## Visual Previews
-
-![1](static/images/1.gif)
-![2](static/images/2.gif)
-![3](static/images/3.gif)
-![4](static/images/4.gif)
-
-## Contributors
-
-[![Contributors](https://contrib.rocks/image?repo=geopetro/anglerphish)](https://github.com/geopetro/anglerphish/graphs/contributors)
-
-Includes everyone across the project's full history — the original Gophish authors inherited through the fork as well as Anglerphish contributors.
-
-## A fork based on original Gophish v0.12.1:
-
-![Build Status](https://github.com/geopetro/anglerphish/workflows/CI/badge.svg) [![GoDoc](https://godoc.org/github.com/gophish/gophish?status.svg)](https://godoc.org/github.com/gophish/gophish)
-
-### Gophish: Open-Source Phishing Toolkit
-
-[Gophish](https://getgophish.com) is an open-source phishing toolkit designed for businesses and penetration testers. It provides the ability to quickly and easily setup and execute phishing engagements and security awareness training.
-
-### Install
-
-Installation of Anglerphish remains dead-simple - just download and extract the zip containing the [release for your system](https://github.com/geopetro/anglerphish/releases/), and run the binary. Anglerphish has also binary releases for Windows, Mac, and Linux platforms.
-
-### Building From Source
-
-Para compilar o EthPhish, instale Go 1.24.5 e um compilador C, então execute
-`CGO_ENABLED=1 go build -o ethphish .`. Consulte o runbook de desenvolvimento
-local para os pré-requisitos e a execução via Docker Compose.
-
-### Setup
-No ambiente local, inicie com `docker compose up -d` e acesse a superfície web
-em `https://localhost:9443`. O painel administrativo não é publicado no host.
-Na primeira execução, a credencial administrativa temporária é gerada de forma
-aleatória e registrada apenas nos logs do servidor local; altere-a no primeiro
-acesso. Consulte o runbook de desenvolvimento local para a configuração e a
-recuperação PostgreSQL.
-
-### Documentation
-
-Documentation for Anglerphish - Documentation section includes several Anglerphish additions such as newly added API Endpoints.
-
-Documentation of the original gophish can be found on the official [site](http://getgophish.com/documentation).
-
-### Issues
-
-🐞 Found a bug? Feel free to [file an issue](https://github.com/geopetro/anglerphish/releases/issues/new) — feedback is always welcome!
-
-### License
+ internet ── HTTPS 443 ── Caddy ── TLS interno ── web de campanhas/quishing
 ```
-MIT License
 
-Copyright (c) 2013–2020 Jordan Wright
-Copyright (c) 2025–2026 George Petropoulos
+Na v0.1.0, scheduler, mailer e workers são componentes internos do processo do
+servidor central; não existe uma porta de comunicação central-worker. A
+separação em nodes é a arquitetura-alvo: workers sem acesso administrativo nem
+ao PostgreSQL consumirão jobs assinados de RabbitMQ, em rede privada, por AMQP
+TLS (`5671`). A porta AMQP não será publicada no host.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architecture.md).
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
+## Containers e portas
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+| Componente | Papel | Portas | Exposição |
+| --- | --- | --- | --- |
+| `reverse-proxy` | TLS público e roteamento web | 9443/TCP local (443/TCP em produção) | publicada somente para conteúdo web autorizado |
+| `server` | administração, API, campanhas e worker interno | 3333/TCP admin, 8080/TCP web | somente redes Docker internas |
+| `postgres` | dados e migrations | 5432/TCP | rede de dados interna |
+| `rabbitmq` | fundação para distribuição futura | 5672/5671/TCP | rede de dados interna |
+| `tls-init` | prepara volume privado de certificados | nenhuma | execução única, sem rede |
+| `worker-node` (futuro) | entrega aprovada e observabilidade | AMQP TLS 5671 de saída; SMTP/HTTPS conforme escopo | sem painel e sem banco direto |
 
-----------------------------------------------------------------
-Fork Attribution
-----------------------------------------------------------------
+## Recursos implementados na v0.1.0
 
-Anglerphish is an enhanced fork of Gophish v0.12.1,
-originally created by Jordan Wright.
+- campanhas legadas por e-mail, SMS, QR Code e canal genérico, sempre sob uso
+  autorizado;
+- gestão de grupos, participantes, templates, landing pages e perfis de envio;
+- eventos de abertura, clique, submissão simulada e reporte, conforme o
+  comportamento herdado;
+- OIDC existente, CSRF, autenticação administrativa e testes de caracterização;
+- relatórios herdados Word/Excel, storage de relatórios e anonimização já
+  existente no baseline;
+- PostgreSQL, migrations idempotentes, readiness e health checks;
+- TLS de desenvolvimento e configuração de TLS obrigatório para PostgreSQL
+  quando `ETHPHISH_DB_REQUIRE_TLS=true`;
+- backups lógicos e restore ensaiado em banco isolado;
+- CI/CD e controles de supply chain descritos em [release notes](RELEASE_NOTES.md).
 
-----------------------------------------------------------------
-Intended Use Notice (Non-Binding Advisory)
-----------------------------------------------------------------
+## Próximas capacidades
 
-Anglerphish is intended exclusively for authorized security
-testing, phishing simulations, user awareness training,
-and defensive cybersecurity research.
+- transactional outbox, filas AMQP, retries, DLQ e workers distribuídos;
+- nodes de worker escaláveis horizontalmente, com identidade própria e sem
+  acesso direto ao banco;
+- multitenancy com RLS, portal de clientes e fluxo auditável de aprovação;
+- dashboard operacional e executivo, métricas de capacidade e observabilidade;
+- bundles versionados de campanhas, conteúdos de treinamento e importação/
+  exportação controlada;
+- backup automatizado, retenção, restauração recorrente e storage externo;
+- alta disponibilidade, assinatura de imagens e política de atualização de
+  dependências.
 
-Users are responsible for ensuring compliance with all
-applicable laws and obtaining proper authorization before use.
+## Fora de escopo
 
-This notice does not modify or supersede the terms of the MIT License.
+- coleta, retenção ou recuperação de senhas, OTPs, cartões ou credenciais reais;
+- evasão de filtros, antivírus, EDR, gateways ou mecanismos de proteção;
+- payloads, exploração, comprometimento de contas ou acesso não autorizado;
+- campanhas sem aprovação formal, domínios fora do escopo ou público não
+  autorizado;
+- exposição pública do painel administrativo.
+
+## Requisitos
+
+- Go 1.24.5 e compilador C (compatibilidade SQLite legada nos testes);
+- Docker Engine com Compose v2;
+- Node 22 para reconstrução de assets;
+- PostgreSQL 17 para o ambiente Compose.
+
+Referência de capacidade inicial: servidor central com 2 vCPU, 4 GB RAM e
+100 GB de disco; cada worker futuro com 1 vCPU, 1 GB RAM e 50 GB de disco. A
+capacidade real deve ser dimensionada por volume, taxa de entrega aprovada,
+retenção de eventos e geração de relatórios.
+
+## Desenvolvimento local
+
+```sh
+docker compose build
+docker compose up -d
+docker compose ps
 ```
+
+Acesse `https://localhost:9443` para a superfície web de desenvolvimento. O
+painel administrativo não é publicado no host. A credencial temporária é
+gerada apenas no primeiro início e deve ser alterada imediatamente.
+
+```sh
+CGO_ENABLED=1 go test ./...
+./scripts/backup-postgres.sh
+```
+
+Consulte [desenvolvimento local](docs/runbooks/local-development.md),
+[release notes](RELEASE_NOTES.md), [issues conhecidos](ISSUES_CONHECIDOS.md) e
+[política de segurança](SECURITY.md).
+
+## Documentação
+
+- [Arquitetura alvo](docs/architecture/target-architecture.md)
+- [Inventário de dependências](docs/architecture/dependency-inventory.md)
+- [Threat model](docs/security/threat-model.md)
+- [Uso aceitável](docs/product/acceptable-use.md)
+- [Status das Sprints 0–2](docs/project/sprint-0-2-status.md)
+- [Release notes v0.1.0](RELEASE_NOTES.md)
+- [Issues conhecidos](ISSUES_CONHECIDOS.md)
+
+## Licença e atribuição
+
+O EthPhish mantém a atribuição ao Gophish e ao Anglerphish nos termos da
+licença MIT herdada. As mudanças deste repositório formam um fork independente
+e não implicam endosso dos projetos upstream.
