@@ -159,7 +159,7 @@ O Dockerfile atual:
 
 * utiliza `node:latest`;
 * executa `npm install`;
-* utiliza `golang:1.24` sem digest;
+* utilizava `golang:1.24` sem digest; a imagem atual fixa Go 1.25.12.
 * executa `go get` durante o build;
 * troca todos os endereços `127.0.0.1` por `0.0.0.0`;
 * expõe `3333`, `8080`, `8443` e `80`;
@@ -430,4 +430,3 @@ Treinamento + analytics + dashboards
 [3]: https://github.com/geopetro/anglerphish/blob/master/FEATURES.md "anglerphish/FEATURES.md at master · geopetro/anglerphish · GitHub"
 [4]: https://github.com/geopetro/anglerphish/blob/master/go.mod "anglerphish/go.mod at master · geopetro/anglerphish · GitHub"
 [5]: https://github.com/geopetro/anglerphish/blob/master/.github/workflows/ci.yml "anglerphish/.github/workflows/ci.yml at master · geopetro/anglerphish · GitHub"
-

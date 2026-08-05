@@ -19,7 +19,7 @@ controlado; não é uma autorização para campanhas externas ou produção púb
 
 ### Plataforma
 
-- Docker multi-stage com Node 22.18.0, Go 1.24.5 e runtime Debian slim;
+- Docker multi-stage com Node 22.18.0, Go 1.25.12 e runtime Debian slim;
 - execução como UID/GID 10001, sem capabilities e sem publicação da porta
   administrativa;
 - Compose com Caddy, PostgreSQL 17, RabbitMQ, volumes privados e health checks;
@@ -39,6 +39,9 @@ controlado; não é uma autorização para campanhas externas ou produção púb
 - CI para formatação, vet, testes, PostgreSQL efêmero, Gitleaks,
   govulncheck, Trivy e SBOM;
 - testes de configuração, TLS, health checks e integração PostgreSQL.
+- correção das CVEs de alta e crítica severidade encontradas na imagem inicial:
+  Go 1.25.12, `golang.org/x/{crypto,net,oauth2,text}`, `go-jose` e `logrus`
+  foram atualizados para versões corrigidas.
 
 ## Integrações
 

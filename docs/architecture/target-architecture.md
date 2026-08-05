@@ -80,7 +80,7 @@ planning por campanha, retenção e SLO.
 
 | Camada | Ferramentas | Função |
 | --- | --- | --- |
-| aplicação | Go 1.24.5, GORM legado, Goose | servidor, domínio e migrations |
+| aplicação | Go 1.25.12, GORM legado, Goose | servidor, domínio e migrations |
 | interface | Node 22, Gulp, Webpack | assets do frontend herdado |
 | dados | PostgreSQL 17 | persistência e migrations |
 | mensageria | RabbitMQ 4 | fundação de distribuição futura |

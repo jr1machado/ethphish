@@ -6,7 +6,7 @@ RUN corepack enable && yarn install --frozen-lockfile
 COPY static ./static
 RUN yarn gulp
 
-FROM golang:1.24.5-bookworm AS backend
+FROM golang:1.25.12-bookworm AS backend
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

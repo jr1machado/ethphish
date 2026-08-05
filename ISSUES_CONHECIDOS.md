@@ -11,7 +11,7 @@
 | GORM v1 e frontend legado | dependências com manutenção limitada | modernização incremental após estabilização funcional |
 | Certificados autoassinados | adequados apenas para desenvolvimento | usar CA corporativa ou certificados públicos gerenciados em produção |
 | Restore automatizado não existe | recuperação requer runbook e operador autorizado | automatizar retenção, restore periódico e evidência de teste |
-| CI ainda não está publicado | token GitHub atual não possui escopo `workflow` | executar `gh auth refresh -h github.com -s workflow` e publicar a branch |
+| Dependências legadas fora do escopo do scanner | componentes herdados como GORM v1 exigem acompanhamento contínuo | CI bloqueia CVEs HIGH/CRITICAL corrigíveis em cada alteração de imagem |
 
 ## Restrições de segurança e produto
 

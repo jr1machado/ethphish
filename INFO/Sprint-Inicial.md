@@ -12,7 +12,7 @@
 
 ## 1.0 Gate inicial de ambiente
 
-Antes do início da Sprint 0, o ambiente de desenvolvimento deve ter Go 1.24.5,
+Antes do início da Sprint 0, o ambiente de desenvolvimento deve ter Go 1.25.12,
 Docker Compose v2 e Node 22 instalados e validados. A primeira evidência de
 execução é `go version` e `go test ./...`; dependências ausentes ou cache sem
 permissão de escrita devem ser corrigidos antes de aceitar qualquer item da

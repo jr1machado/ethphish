@@ -126,7 +126,7 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
 
 ## Requisitos
 
-- Go 1.24.5 e compilador C (compatibilidade SQLite legada nos testes);
+- Go 1.25.12 e compilador C (compatibilidade SQLite legada nos testes);
 - Docker Engine com Compose v2;
 - Node 22 para reconstrução de assets;
 - PostgreSQL 17 para o ambiente Compose.

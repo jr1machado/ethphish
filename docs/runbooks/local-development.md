@@ -6,7 +6,7 @@ Antes de iniciar qualquer sprint de código, instale e valide as ferramentas de
 build abaixo. Este é um gate inicial obrigatório: nenhuma alteração deve ser
 considerada pronta sem conseguir executar a suíte local.
 
-- Go **1.24.5** (`go version` deve retornar `go1.24.5`);
+- Go **1.25.12** (`go version` deve retornar `go1.25.12`);
 - compilador C compatível com GCC (`gcc --version`), exigido pelo driver SQLite
   legado enquanto a Sprint 2 não concluir a transição para PostgreSQL;
 - Docker com Compose v2;
