@@ -56,7 +56,25 @@ Em ambientes fora do desenvolvimento, use um DSN PostgreSQL com TLS e defina
 `ETHPHISH_DB_REQUIRE_TLS=true`. Com essa opção, a aplicação se recusa a iniciar
 se o DSN usar `sslmode=disable`.
 
-## Migrations e recuperação PostgreSQL
+## Migrations, pré-flight e recuperação PostgreSQL
+
+### Pré-flight de migração SQLite → PostgreSQL
+
+O comando abaixo é uma etapa de aprovação, não uma cópia de dados. Ele abre a
+origem SQLite em modo somente leitura, lista as tabelas e compara suas
+contagens com um PostgreSQL que já recebeu as migrations:
+
+```bash
+go run ./cmd/sqlite-postgres-preflight \
+  --sqlite /caminho/legado.db \
+  --postgres-dsn 'postgres://usuario:senha@host:5432/ethphish?sslmode=verify-full'
+```
+
+O JSON de saída é evidência de reconciliação e não contém linhas, credenciais
+nem o DSN. O comando retorna `3` quando encontrar dados de negócio no destino;
+nesse caso, interrompa o processo e aprove explicitamente o destino correto.
+Execute-o somente contra uma cópia isolada e aprovada da base legada. A cópia
+dos dados ainda não faz parte desta etapa.
 
 O servidor executa as migrations ao iniciar. Para validar uma base vazia, use
 `docker compose up -d` e consulte `docker compose logs server`. A repetição da
