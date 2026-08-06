@@ -77,6 +77,10 @@ func (as *Server) Users(w http.ResponseWriter, r *http.Request) {
 		return
 	case r.Method == "POST":
 		scope, scopeErr := ctx.RequireTenantScope(r)
+		if scopeErr != nil {
+			JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+			return
+		}
 		ur := &userRequest{}
 		err := json.NewDecoder(r.Body).Decode(ur)
 		if err != nil {
@@ -112,13 +116,7 @@ func (as *Server) Users(w http.ResponseWriter, r *http.Request) {
 			PasswordChangeRequired: ur.PasswordChangeRequired,
 			AccountLocked:          ur.AccountLocked,
 		}
-		if scopeErr == nil {
-			err = models.PutUserForTenant(&user, scope.TenantID, scope.CompanyID, "member")
-		} else {
-			// Direct handler calls in legacy integrations do not traverse the
-			// router. Their compatibility path creates a default-tenant grant.
-			err = models.PutUser(&user)
-		}
+		err = models.PutUserForTenant(&user, scope.TenantID, scope.CompanyID, "member")
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
 			return

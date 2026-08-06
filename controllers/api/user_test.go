@@ -77,6 +77,7 @@ func TestCreateUser(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewBuffer(body))
 	r.Header.Set("Content-Type", "application/json")
 	r = ctx.Set(r, "user", testCtx.admin)
+	r = ctx.WithTenantScope(r, ctx.TenantScope{TenantID: 1, UserID: testCtx.admin.Id})
 	w := httptest.NewRecorder()
 
 	testCtx.apiServer.Users(w, r)
