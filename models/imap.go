@@ -6,6 +6,7 @@ import (
 	"time"
 
 	log "github.com/gophish/gophish/logger"
+	"github.com/jinzhu/gorm"
 )
 
 const DefaultIMAPFolder = "INBOX"
@@ -229,6 +230,91 @@ func UpdateIMAP(im *IMAP, uid int64) error {
 
 	log.Infof("IMAP configuration %d updated successfully. Enabled: %v", im.Id, updatedIm.Enabled)
 	return nil
+}
+
+// GetIMAPForTenant returns all IMAP servers owned by the given tenant and user.
+func GetIMAPForTenant(tenantID, uid int64) ([]IMAP, error) {
+	im := []IMAP{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND user_id=?", tenantID, uid).Find(&im).Error
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return im, err
+}
+
+// GetIMAPByIdForTenant returns a specific IMAP configuration scoped to the
+// given tenant.
+func GetIMAPByIdForTenant(id, tenantID, uid int64) (IMAP, error) {
+	im := IMAP{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).First(&im).Error
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return im, err
+}
+
+// PostIMAPForTenant creates a new IMAP configuration inside a tenant-bound
+// transaction.
+func PostIMAPForTenant(im *IMAP, tenantID, uid int64) error {
+	if err := im.Validate(); err != nil {
+		log.Error(err)
+		return err
+	}
+	im.UserId = uid
+	im.TenantID = tenantID
+	if im.Name == "" {
+		im.Name = "IMAP Configuration " + time.Now().Format("2006-01-02 15:04:05")
+	}
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Save(im).Error
+	})
+}
+
+// UpdateIMAPForTenant verifies the configuration belongs to the selected
+// tenant before updating it.
+func UpdateIMAPForTenant(im *IMAP, tenantID, uid int64) error {
+	if err := im.Validate(); err != nil {
+		log.Error(err)
+		return err
+	}
+	im.ModifiedDate = time.Now().UTC()
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		var existing IMAP
+		if err := tx.Where("id=? AND tenant_id=? AND user_id=?", im.Id, tenantID, uid).First(&existing).Error; err != nil {
+			return err
+		}
+		im.UserId = uid
+		im.TenantID = tenantID
+		updateMap := map[string]interface{}{
+			"name":                           im.Name,
+			"enabled":                        im.Enabled,
+			"host":                           im.Host,
+			"port":                           im.Port,
+			"username":                       im.Username,
+			"password":                       im.Password,
+			"tls":                            im.TLS,
+			"ignore_cert_errors":             im.IgnoreCertErrors,
+			"folder":                         im.Folder,
+			"restrict_domain":                im.RestrictDomain,
+			"delete_reported_campaign_email": im.DeleteReportedCampaignEmail,
+			"tracking_type":                  im.TrackingType,
+			"imap_freq":                      im.IMAPFreq,
+			"modified_date":                  im.ModifiedDate,
+		}
+		return tx.Model(&IMAP{}).Where("id=? AND tenant_id=? AND user_id=?", im.Id, tenantID, uid).Updates(updateMap).Error
+	})
+}
+
+// DeleteIMAPByIdForTenant deletes a specific IMAP configuration scoped to the
+// given tenant.
+func DeleteIMAPByIdForTenant(id, tenantID, uid int64) error {
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).Delete(&IMAP{}).Error
+	})
 }
 
 // DeleteIMAPById deletes a specific IMAP configuration by ID.

@@ -36,9 +36,14 @@ func (as *Server) IMAPServerValidate(w http.ResponseWriter, r *http.Request) {
 
 // IMAPServer handles requests for the /api/imapserver/ endpoint
 func (as *Server) IMAPServer(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	switch {
 	case r.Method == "GET":
-		ss, err := models.GetIMAP(ctx.Get(r, "user_id").(int64))
+		ss, err := models.GetIMAPForTenant(scope.TenantID, ctx.Get(r, "user_id").(int64))
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
 			return
@@ -54,8 +59,7 @@ func (as *Server) IMAPServer(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		im.ModifiedDate = time.Now().UTC()
-		im.UserId = ctx.Get(r, "user_id").(int64)
-		err = models.PostIMAP(&im, ctx.Get(r, "user_id").(int64))
+		err = models.PostIMAPForTenant(&im, scope.TenantID, ctx.Get(r, "user_id").(int64))
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
 			return
@@ -66,6 +70,11 @@ func (as *Server) IMAPServer(w http.ResponseWriter, r *http.Request) {
 
 // IMAPServerById handles requests for the /api/imapserver/:id endpoint
 func (as *Server) IMAPServerById(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	vars := mux.Vars(r)
 	id, err := strconv.ParseInt(vars["id"], 10, 64)
 	if err != nil {
@@ -76,7 +85,7 @@ func (as *Server) IMAPServerById(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case r.Method == "GET":
-		im, err := models.GetIMAPById(id, uid)
+		im, err := models.GetIMAPByIdForTenant(id, scope.TenantID, uid)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "IMAP configuration not found."}, http.StatusNotFound)
 			return
@@ -92,7 +101,7 @@ func (as *Server) IMAPServerById(w http.ResponseWriter, r *http.Request) {
 		}
 		im.Id = id
 		im.ModifiedDate = time.Now().UTC()
-		err = models.UpdateIMAP(&im, uid)
+		err = models.UpdateIMAPForTenant(&im, scope.TenantID, uid)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
 			return
@@ -108,7 +117,7 @@ func (as *Server) IMAPServerById(w http.ResponseWriter, r *http.Request) {
 		JSONResponse(w, models.Response{Success: true, Message: "Successfully updated IMAP configuration."}, http.StatusOK)
 
 	case r.Method == "DELETE":
-		err := models.DeleteIMAPById(id, uid)
+		err := models.DeleteIMAPByIdForTenant(id, scope.TenantID, uid)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
 			return

@@ -23,9 +23,10 @@ type SMSTestSuite struct {
 	admin     models.User
 }
 
-// setupRequestContext adds the user_id to the request context
+// setupRequestContext adds the user_id and tenant scope to the request context
 func (s *SMSTestSuite) setupRequestContext(req *http.Request) *http.Request {
-	return ctx.Set(req, "user_id", s.admin.Id)
+	req = ctx.Set(req, "user_id", s.admin.Id)
+	return ctx.WithTenantScope(req, ctx.TenantScope{TenantID: 1, UserID: s.admin.Id})
 }
 
 func (s *SMSTestSuite) SetupSuite() {
@@ -117,7 +118,7 @@ func (s *SMSTestSuite) TestSMSProfile() {
 		}`,
 		UserId: 1,
 	}
-	err := models.PostSMS(&sms)
+	err := models.PostSMSForTenant(&sms, 1)
 	s.Nil(err)
 
 	// Test GET request

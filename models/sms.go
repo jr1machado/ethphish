@@ -6,6 +6,7 @@ import (
 	"time"
 
 	log "github.com/gophish/gophish/logger"
+	"github.com/jinzhu/gorm"
 )
 
 // SMS contains the attributes needed to handle the sending of campaign SMS messages
@@ -117,6 +118,80 @@ func GetSMSByName(n string, uid int64) (SMS, error) {
 		return s, err
 	}
 	return s, err
+}
+
+// GetSMSsForTenant returns the SMS profiles owned by the given tenant and user.
+func GetSMSsForTenant(tenantID, uid int64) ([]SMS, error) {
+	ss := []SMS{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND user_id=?", tenantID, uid).Find(&ss).Error
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return ss, err
+}
+
+// GetSMSForTenant returns the SMS profile scoped to the given tenant.
+func GetSMSForTenant(id, tenantID, uid int64) (SMS, error) {
+	s := SMS{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND user_id=? AND id=?", tenantID, uid, id).Find(&s).Error
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return s, err
+}
+
+// GetSMSByNameForTenant prevents duplicate-name checks from leaking
+// information across tenants.
+func GetSMSByNameForTenant(n string, tenantID, uid int64) (SMS, error) {
+	s := SMS{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND user_id=? AND name=?", tenantID, uid, n).Find(&s).Error
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return s, err
+}
+
+// PostSMSForTenant persists an SMS profile inside a tenant-bound transaction.
+func PostSMSForTenant(s *SMS, tenantID int64) error {
+	if err := s.Validate(); err != nil {
+		log.Error(err)
+		return err
+	}
+	s.TenantID = tenantID
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Save(s).Error
+	})
+}
+
+// PutSMSForTenant verifies the row belongs to the selected tenant before
+// updating it.
+func PutSMSForTenant(s *SMS, tenantID, uid int64) error {
+	if err := s.Validate(); err != nil {
+		log.Error(err)
+		return err
+	}
+	s.TenantID = tenantID
+	s.UserId = uid
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		var existing SMS
+		if err := tx.Where("id=? AND tenant_id=? AND user_id=?", s.Id, tenantID, uid).First(&existing).Error; err != nil {
+			return err
+		}
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", s.Id, tenantID, uid).Save(s).Error
+	})
+}
+
+// DeleteSMSForTenant removes an SMS profile only from the selected tenant.
+func DeleteSMSForTenant(id, tenantID, uid int64) error {
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).Delete(&SMS{}).Error
+	})
 }
 
 // PostSMS creates a new SMS profile in the database.

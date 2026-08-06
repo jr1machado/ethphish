@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	ctx "github.com/gophish/gophish/context"
 	log "github.com/gophish/gophish/logger"
 	"github.com/gophish/gophish/models"
 	"github.com/gophish/gophish/webhook"
@@ -13,9 +14,14 @@ import (
 
 // Webhooks returns a list of webhooks, both active and disabled
 func (as *Server) Webhooks(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	switch {
 	case r.Method == "GET":
-		whs, err := models.GetWebhooks()
+		whs, err := models.GetWebhooksForTenant(scope.TenantID)
 		if err != nil {
 			log.Error(err)
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
@@ -30,7 +36,7 @@ func (as *Server) Webhooks(w http.ResponseWriter, r *http.Request) {
 			JSONResponse(w, models.Response{Success: false, Message: "Invalid JSON structure"}, http.StatusBadRequest)
 			return
 		}
-		err = models.PostWebhook(&wh)
+		err = models.PostWebhookForTenant(&wh, scope.TenantID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusBadRequest)
 			return
@@ -41,9 +47,14 @@ func (as *Server) Webhooks(w http.ResponseWriter, r *http.Request) {
 
 // Webhook returns details of a single webhook specified by "id" parameter
 func (as *Server) Webhook(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
-	wh, err := models.GetWebhook(id)
+	wh, err := models.GetWebhookForTenant(id, scope.TenantID)
 	if err != nil {
 		JSONResponse(w, models.Response{Success: false, Message: "Webhook not found"}, http.StatusNotFound)
 		return
@@ -53,7 +64,7 @@ func (as *Server) Webhook(w http.ResponseWriter, r *http.Request) {
 		JSONResponse(w, wh, http.StatusOK)
 
 	case r.Method == "DELETE":
-		err = models.DeleteWebhook(id)
+		err = models.DeleteWebhookForTenant(id, scope.TenantID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
 			return
@@ -70,7 +81,7 @@ func (as *Server) Webhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		wh.Id = id
-		err = models.PutWebhook(&wh)
+		err = models.PutWebhookForTenant(&wh, scope.TenantID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusBadRequest)
 			return
@@ -84,11 +95,16 @@ func (as *Server) ValidateWebhook(w http.ResponseWriter, r *http.Request) {
 	type validationEvent struct {
 		Success bool `json:"success"`
 	}
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	switch {
 	case r.Method == "POST":
 		vars := mux.Vars(r)
 		id, _ := strconv.ParseInt(vars["id"], 0, 64)
-		wh, err := models.GetWebhook(id)
+		wh, err := models.GetWebhookForTenant(id, scope.TenantID)
 		if err != nil {
 			log.Error(err)
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)

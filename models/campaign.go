@@ -318,7 +318,18 @@ func AddEvent(e *Event, campaignID int64) error {
 	e.CampaignId = campaignID
 	e.Time = time.Now().UTC()
 
-	whs, err := GetActiveWebhooks()
+	var campaignTenantID int64
+	if err := db.Table("campaigns").Where("id=?", campaignID).Pluck("tenant_id", &campaignTenantID).Error; err != nil {
+		log.Errorf("error resolving campaign tenant for webhook delivery: %v", err)
+	}
+
+	var whs []Webhook
+	var err error
+	if campaignTenantID > 0 {
+		whs, err = GetActiveWebhooksForTenant(campaignTenantID)
+	} else {
+		whs, err = GetActiveWebhooks()
+	}
 	if err == nil {
 		whEndPoints := []webhook.EndPoint{}
 		for _, wh := range whs {
@@ -1152,6 +1163,309 @@ func PostCampaign(c *Campaign, uid int64) error {
 	return tx.Commit().Error
 }
 
+// PostCampaignForTenant creates a campaign after verifying that every
+// referenced group, template, page and sending profile belongs to the
+// selected tenant. It replaces the legacy user-only lookups so a campaign
+// can never bind to another tenant's entities.
+func PostCampaignForTenant(c *Campaign, tenantID, uid int64) error {
+	var err error
+
+	if c.Type == "" {
+		c.Type = "email"
+	}
+
+	if c.URLParam == "" {
+		RecipientParameter = "rid"
+		log.Infof("Using default URL parameter 'rid' for campaign %s", c.Name)
+	} else {
+		RecipientParameter = c.URLParam
+	}
+
+	c.UserId = uid
+	c.TenantID = tenantID
+	c.CreatedDate = time.Now().UTC()
+	c.CompletedDate = time.Time{}
+	c.Status = CampaignQueued
+	if c.LaunchDate.IsZero() {
+		c.LaunchDate = c.CreatedDate
+	} else {
+		c.LaunchDate = c.LaunchDate.UTC()
+	}
+	if !c.SendByDate.IsZero() {
+		c.SendByDate = c.SendByDate.UTC()
+	}
+	if c.LaunchDate.Before(c.CreatedDate) || c.LaunchDate.Equal(c.CreatedDate) {
+		c.Status = CampaignInProgress
+	}
+
+	if c.Type == "generic" {
+		return postGenericCampaignForTenant(c, tenantID, uid)
+	}
+
+	totalRecipients := 0
+	for i, g := range c.Groups {
+		c.Groups[i], err = GetGroupByNameForTenant(g.Name, tenantID, uid)
+		if err == gorm.ErrRecordNotFound {
+			log.WithFields(logrus.Fields{
+				"group": g.Name,
+			}).Error("Group does not exist")
+			return ErrGroupNotFound
+		} else if err != nil {
+			log.Error(err)
+			return err
+		}
+		totalRecipients += len(c.Groups[i].Targets)
+	}
+
+	err = c.Validate()
+	if err != nil {
+		return err
+	}
+
+	p, err := GetPageByNameForTenant(c.Page.Name, tenantID, uid)
+	if err == gorm.ErrRecordNotFound {
+		log.WithFields(logrus.Fields{
+			"page": c.Page.Name,
+		}).Error("Page does not exist")
+		return ErrPageNotFound
+	} else if err != nil {
+		log.Error(err)
+		return err
+	}
+	c.Page = p
+	c.PageId = p.Id
+
+	switch c.Type {
+	case "sms":
+		st, err := GetSMSTemplateByNameForTenant(c.SMSTemplate.Name, tenantID, uid)
+		if err == gorm.ErrRecordNotFound {
+			log.WithFields(logrus.Fields{
+				"sms_template": c.SMSTemplate.Name,
+			}).Error("SMS template does not exist")
+			return ErrSMSTemplateNotFound
+		} else if err != nil {
+			log.Error(err)
+			return err
+		}
+		c.SMSTemplate = st
+		c.SMSTemplateId = st.Id
+
+		s, err := GetSMSByNameForTenant(c.SMS.Name, tenantID, uid)
+		if err == gorm.ErrRecordNotFound {
+			log.WithFields(logrus.Fields{
+				"sms": c.SMS.Name,
+			}).Error("SMS sending profile does not exist")
+			return ErrSMSNotFound
+		} else if err != nil {
+			log.Error(err)
+			return err
+		}
+		c.SMS = s
+		c.SMSId = s.Id
+	default:
+		t, err := GetTemplateByNameForTenant(c.Template.Name, tenantID, uid)
+		if err == gorm.ErrRecordNotFound {
+			log.WithFields(logrus.Fields{
+				"template": c.Template.Name,
+			}).Error("Template does not exist")
+			return ErrTemplateNotFound
+		} else if err != nil {
+			log.Error(err)
+			return err
+		}
+		c.Template = t
+		c.TemplateId = t.Id
+
+		s, err := GetSMTPByNameForTenant(c.SMTP.Name, tenantID, uid)
+		if err == gorm.ErrRecordNotFound {
+			log.WithFields(logrus.Fields{
+				"smtp": c.SMTP.Name,
+			}).Error("Sending profile does not exist")
+			return ErrSMTPNotFound
+		} else if err != nil {
+			log.Error(err)
+			return err
+		}
+		c.SMTP = s
+		c.SMTPId = s.Id
+	}
+
+	err = db.Save(c).Error
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	err = AddEvent(&Event{Message: "Campaign Created"}, c.Id)
+	if err != nil {
+		log.Error(err)
+	}
+
+	resultMap := make(map[string]bool)
+	recipientIndex := 0
+	tx := db.Begin()
+	for _, g := range c.Groups {
+		for _, t := range g.Targets {
+			dedupKey := t.Email
+			if c.Type == "sms" {
+				dedupKey = t.Phone
+			}
+
+			if _, ok := resultMap[dedupKey]; ok {
+				continue
+			}
+			resultMap[dedupKey] = true
+			sendDate := c.generateSendDate(recipientIndex, totalRecipients)
+			r := &Result{
+				BaseRecipient: BaseRecipient{
+					Email:     t.Email,
+					Phone:     t.Phone,
+					Position:  t.Position,
+					FirstName: t.FirstName,
+					LastName:  t.LastName,
+					Custom:    t.Custom,
+				},
+				Status:       StatusScheduled,
+				CampaignId:   c.Id,
+				UserId:       c.UserId,
+				SendDate:     sendDate,
+				Reported:     false,
+				ModifiedDate: c.CreatedDate,
+				SMSTarget:    c.Type == "sms",
+			}
+
+			err = r.GenerateId(tx)
+			if err != nil {
+				log.Error(err)
+				tx.Rollback()
+				return err
+			}
+			processing := false
+			if r.SendDate.Before(c.CreatedDate) || r.SendDate.Equal(c.CreatedDate) {
+				r.Status = StatusSending
+				processing = true
+			}
+			err = tx.Save(r).Error
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"email": t.Email,
+				}).Errorf("error creating result: %v", err)
+				tx.Rollback()
+				return err
+			}
+			c.Results = append(c.Results, *r)
+
+			if c.Type == "sms" {
+				s := &SMSLog{
+					UserId:     c.UserId,
+					CampaignId: c.Id,
+					RId:        r.RId,
+					SendDate:   sendDate,
+					Processing: processing,
+				}
+				err = tx.Save(s).Error
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"phone": t.Email,
+					}).Errorf("error creating smslog entry: %v", err)
+					tx.Rollback()
+					return err
+				}
+			} else {
+				m := &MailLog{
+					UserId:     c.UserId,
+					CampaignId: c.Id,
+					RId:        r.RId,
+					SendDate:   sendDate,
+					Processing: processing,
+				}
+				err = tx.Save(m).Error
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"email": t.Email,
+					}).Errorf("error creating maillog entry: %v", err)
+					tx.Rollback()
+					return err
+				}
+			}
+			recipientIndex++
+		}
+	}
+	return tx.Commit().Error
+}
+
+// postGenericCampaignForTenant is the tenant-scoped equivalent of
+// postGenericCampaign.
+func postGenericCampaignForTenant(c *Campaign, tenantID, uid int64) error {
+	err := c.Validate()
+	if err != nil {
+		return err
+	}
+
+	p, err := GetPageByNameForTenant(c.Page.Name, tenantID, uid)
+	if err == gorm.ErrRecordNotFound {
+		log.WithFields(logrus.Fields{
+			"page": c.Page.Name,
+		}).Error("Page does not exist")
+		return ErrPageNotFound
+	} else if err != nil {
+		log.Error(err)
+		return err
+	}
+	c.Page = p
+	c.PageId = p.Id
+
+	err = db.Save(c).Error
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	err = AddEvent(&Event{Message: "Campaign Created"}, c.Id)
+	if err != nil {
+		log.Error(err)
+	}
+
+	tx := db.Begin()
+	r := &Result{
+		BaseRecipient: BaseRecipient{
+			FirstName: "Link 1",
+			LastName:  "",
+			Email:     "",
+			Phone:     "",
+		},
+		Status:       StatusSending,
+		CampaignId:   c.Id,
+		UserId:       c.UserId,
+		SendDate:     c.CreatedDate,
+		Reported:     false,
+		ModifiedDate: c.CreatedDate,
+		SMSTarget:    false,
+	}
+
+	err = r.GenerateId(tx)
+	if err != nil {
+		log.Error(err)
+		tx.Rollback()
+		return err
+	}
+
+	err = tx.Save(r).Error
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"campaign_id": c.Id,
+		}).Errorf("error creating result for generic campaign: %v", err)
+		tx.Rollback()
+		return err
+	}
+	c.Results = append(c.Results, *r)
+
+	log.WithFields(logrus.Fields{
+		"campaign_id": c.Id,
+		"rid":         r.RId,
+	}).Info("Created generic campaign with tracking link")
+
+	return tx.Commit().Error
+}
+
 // postGenericCampaign handles the creation of a generic campaign.
 // Generic campaigns don't require groups, templates, or sending profiles.
 // They only need a landing page and create a single anonymous Result for tracking.
@@ -1319,6 +1633,198 @@ func GenerateCampaignLink(campaignId int64, uid int64, customName string) (*Resu
 	}
 
 	// Add a "Link Created" event with the RId as the email field for timeline matching
+	err = AddEvent(&Event{Message: "Link Created", Email: r.RId}, campaignId)
+	if err != nil {
+		log.Warnf("error adding Link Created event: %v", err)
+	}
+
+	log.WithFields(logrus.Fields{
+		"campaign_id": campaignId,
+		"rid":         r.RId,
+		"link_number": count + 1,
+	}).Info("Generated new tracking link for generic campaign")
+
+	return r, nil
+}
+
+// DeleteCampaignForTenant deletes the specified campaign only if it belongs
+// to the given tenant.
+func DeleteCampaignForTenant(id, tenantID int64) error {
+	log.WithFields(logrus.Fields{
+		"campaign_id": id,
+	}).Info("Deleting campaign")
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		var existing Campaign
+		if err := tx.Where("id=? AND tenant_id=?", id, tenantID).First(&existing).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("campaign_id=?", id).Delete(&Result{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("campaign_id=?", id).Delete(&Event{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("campaign_id=?", id).Delete(&MailLog{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("campaign_id=?", id).Delete(&SMSLog{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id=? AND tenant_id=?", id, tenantID).Delete(&Campaign{}).Error
+	})
+}
+
+// DeleteCampaignsForTenant is the bulk-delete equivalent of DeleteCampaigns,
+// scoped to campaigns owned by both the tenant and the user.
+func DeleteCampaignsForTenant(ids []int64, tenantID, uid int64) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	log.WithFields(logrus.Fields{
+		"campaign_ids": ids,
+		"tenant_id":    tenantID,
+		"user_id":      uid,
+	}).Info("Bulk deleting campaigns")
+
+	deleted := 0
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		var campaigns []Campaign
+		if err := tx.Where("id IN (?) AND tenant_id = ? AND user_id = ?", ids, tenantID, uid).Find(&campaigns).Error; err != nil {
+			return err
+		}
+		validIds := make([]int64, 0, len(campaigns))
+		for _, c := range campaigns {
+			validIds = append(validIds, c.Id)
+		}
+		if len(validIds) == 0 {
+			return nil
+		}
+		if err := tx.Where("campaign_id IN (?)", validIds).Delete(&Result{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("campaign_id IN (?)", validIds).Delete(&Event{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("campaign_id IN (?)", validIds).Delete(&MailLog{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("campaign_id IN (?)", validIds).Delete(&SMSLog{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("id IN (?)", validIds).Delete(&Campaign{}).Error; err != nil {
+			return err
+		}
+		deleted = len(validIds)
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+		return 0, err
+	}
+	return deleted, nil
+}
+
+// CompleteCampaignForTenant ends a campaign after verifying tenant ownership.
+func CompleteCampaignForTenant(id, tenantID, uid int64) error {
+	log.WithFields(logrus.Fields{
+		"campaign_id": id,
+	}).Info("Marking campaign as complete")
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		var c Campaign
+		if err := tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).First(&c).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("campaign_id=?", id).Delete(&MailLog{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("campaign_id=?", id).Delete(&SMSLog{}).Error; err != nil {
+			return err
+		}
+		if c.Status == CampaignComplete {
+			return nil
+		}
+		c.CompletedDate = time.Now().UTC()
+		c.Status = CampaignComplete
+		return tx.Model(&Campaign{}).Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).
+			Select([]string{"completed_date", "status"}).UpdateColumns(&c).Error
+	})
+}
+
+// GenerateCampaignLinkForTenant is the tenant-scoped equivalent of
+// GenerateCampaignLink.
+func GenerateCampaignLinkForTenant(campaignId, tenantID, uid int64, customName string) (*Result, error) {
+	c, err := GetCampaignForTenant(campaignId, tenantID, uid)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.Type != "generic" {
+		return nil, ErrCampaignNotGeneric
+	}
+	if c.Status == CampaignComplete {
+		return nil, ErrCampaignCompleted
+	}
+
+	var count int64
+	err = db.Model(&Result{}).Where("campaign_id = ?", campaignId).Count(&count).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var linkName string
+	if customName != "" {
+		linkName = customName
+	} else {
+		linkNumber := count + 1
+		linkName = "Link "
+		if linkNumber < 10 {
+			linkName += string(rune('0' + linkNumber))
+		} else if linkNumber < 100 {
+			linkName += string(rune('0'+linkNumber/10)) + string(rune('0'+linkNumber%10))
+		} else {
+			linkName += string(rune('0'+linkNumber/100)) + string(rune('0'+(linkNumber/10)%10)) + string(rune('0'+linkNumber%10))
+		}
+	}
+
+	tx := db.Begin()
+	r := &Result{
+		BaseRecipient: BaseRecipient{
+			FirstName: linkName,
+			LastName:  "",
+			Email:     "",
+			Phone:     "",
+		},
+		Status:       StatusSending,
+		CampaignId:   campaignId,
+		UserId:       uid,
+		SendDate:     time.Now().UTC(),
+		Reported:     false,
+		ModifiedDate: time.Now().UTC(),
+		SMSTarget:    false,
+	}
+
+	err = r.GenerateId(tx)
+	if err != nil {
+		log.Error(err)
+		tx.Rollback()
+		return nil, err
+	}
+
+	err = tx.Save(r).Error
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"campaign_id": campaignId,
+		}).Errorf("error creating new link for generic campaign: %v", err)
+		tx.Rollback()
+		return nil, err
+	}
+
+	err = tx.Commit().Error
+	if err != nil {
+		return nil, err
+	}
+
 	err = AddEvent(&Event{Message: "Link Created", Email: r.RId}, campaignId)
 	if err != nil {
 		log.Warnf("error adding Link Created event: %v", err)
