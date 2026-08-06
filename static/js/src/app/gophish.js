@@ -554,39 +554,26 @@ var api = {
 }
 window.api = api
 
-// Global function to apply theme (supports: 'default', 'dark-teal', 'dark-crimson', 'goldphish', 'lagocephalus', 'light-sand', 'matrix')
+// Global function to apply theme (supports: 'ethphish-light', 'ethphish-dark')
 function applyTheme(theme) {
-    // Remove all theme classes first
-    document.body.classList.remove('dark-theme', 'crimson-theme', 'goldphish-theme', 'lagocephalus-theme', 'light-sand-theme', 'matrix-theme');
-    document.documentElement.classList.remove('dark-theme', 'crimson-theme', 'goldphish-theme', 'lagocephalus-theme', 'light-sand-theme', 'matrix-theme');
+    document.body.classList.remove('ethphish-dark-theme', 'ethphish-light-theme');
+    document.documentElement.classList.remove('ethphish-dark-theme', 'ethphish-light-theme');
 
-    // Apply the selected theme
-    if (theme === 'dark-teal') {
-        document.body.classList.add('dark-theme');
-        document.documentElement.classList.add('dark-theme');
-    } else if (theme === 'dark-crimson') {
-        document.body.classList.add('crimson-theme');
-        document.documentElement.classList.add('crimson-theme');
-    } else if (theme === 'goldphish') {
-        document.body.classList.add('goldphish-theme');
-        document.documentElement.classList.add('goldphish-theme');
-    } else if (theme === 'lagocephalus') {
-        document.body.classList.add('lagocephalus-theme');
-        document.documentElement.classList.add('lagocephalus-theme');
-    } else if (theme === 'light-sand') {
-        document.body.classList.add('light-sand-theme');
-        document.documentElement.classList.add('light-sand-theme');
-    } else if (theme === 'matrix') {
-        document.body.classList.add('matrix-theme');
-        document.documentElement.classList.add('matrix-theme');
+    if (theme === 'ethphish-dark') {
+        document.body.classList.add('ethphish-dark-theme');
+        document.documentElement.classList.add('ethphish-dark-theme');
+    } else {
+        // Unrecognized or 'ethphish-light' values both fall back to light,
+        // so a stored legacy theme name doesn't leave the page unstyled.
+        document.body.classList.add('ethphish-light-theme');
+        document.documentElement.classList.add('ethphish-light-theme');
     }
-    // 'default' theme has no classes, so light theme is shown
 }
 window.applyTheme = applyTheme;
 
 // Legacy function for backward compatibility
 function applyDarkTheme(enabled) {
-    applyTheme(enabled ? 'dark-teal' : 'default');
+    applyTheme(enabled ? 'ethphish-dark' : 'ethphish-light');
 }
 window.applyDarkTheme = applyDarkTheme;
 

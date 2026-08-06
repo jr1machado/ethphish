@@ -1492,52 +1492,22 @@ function load() {
                     $("#resultsMapContainer").show()
                     
                     // Get theme-aware map colors
-                    var currentTheme = localStorage.getItem('gophish.theme') || 'default';
+                    var currentTheme = localStorage.getItem('gophish.theme') || 'ethphish-light';
                     var mapColors = {
-                        'default': {
+                        'ethphish-light': {
                             fill: '#ffffff',
-                            hover: '#1abc9c',
-                            border: '#283F50',
-                            point: '#283F50'
+                            hover: '#2c5282',
+                            border: '#1e3a5f',
+                            point: '#1e3a5f'
                         },
-                        'dark-teal': {
-                            fill: '#1e2a35',
-                            hover: '#1abc9c',
-                            border: '#3a4d5c',
-                            point: '#1abc9c'
-                        },
-                        'dark-crimson': {
-                            fill: '#1e2a35',
-                            hover: '#dc3545',
-                            border: '#3a4d5c',
-                            point: '#dc3545'
-                        },
-                        'goldphish': {
-                            fill: '#fffdf6',
-                            hover: '#f47a20',
-                            border: '#e0cba0',
-                            point: '#f47a20'
-                        },
-                        'lagocephalus': {
-                            fill: '#1b2b2f',
-                            hover: '#7fa8af',
-                            border: '#3a545a',
-                            point: '#7fa8af'
-                        },
-                        'light-sand': {
-                            fill: '#f5f0e4',
-                            hover: '#a85030',
-                            border: '#c6b998',
-                            point: '#a85030'
-                        },
-                        'matrix': {
-                            fill: '#0a120a',
-                            hover: '#00ff41',
-                            border: '#0f4a0f',
-                            point: '#00ff41'
+                        'ethphish-dark': {
+                            fill: '#1c222b',
+                            hover: '#3a6ba5',
+                            border: '#2a313c',
+                            point: '#3a6ba5'
                         }
                     };
-                    var colors = mapColors[currentTheme] || mapColors['default'];
+                    var colors = mapColors[currentTheme] || mapColors['ethphish-light'];
                     
                     map = new Datamap({
                         element: document.getElementById("resultsMap"),
