@@ -209,6 +209,26 @@ func GetSMTPsForTenant(tenantID, uid int64) ([]SMTP, error) {
 	return ss, err
 }
 
+// GetAnySMTPForTenant returns the tenant's first configured SMTP sending
+// profile, regardless of which admin user owns it. For system-initiated
+// e-mail with no acting admin (e.g. the client portal's self-service
+// login link) — GetSMTPsForTenant requires a uid because it backs
+// admin-owned-resource listing, which doesn't apply here. Same "picks the
+// first one" simplification as approvals.tenantSMTP.
+func GetAnySMTPForTenant(tenantID int64) (SMTP, error) {
+	s := SMTP{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=?", tenantID).First(&s).Error
+	})
+	if err != nil {
+		return s, err
+	}
+	if err := db.Where("smtp_id=?", s.Id).Find(&s.Headers).Error; err != nil && err != gorm.ErrRecordNotFound {
+		return s, err
+	}
+	return s, nil
+}
+
 // GetSMTPForTenant returns the SMTP profile scoped to the given tenant.
 func GetSMTPForTenant(id, tenantID, uid int64) (SMTP, error) {
 	s := SMTP{}

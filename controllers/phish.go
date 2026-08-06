@@ -44,6 +44,22 @@ type PhishingServer struct {
 	server         *http.Server
 	config         config.PhishServer
 	contactAddress string
+	// approvalPortalBaseURL is the public base URL used to build absolute
+	// links in e-mails this server sends on its own (the client portal's
+	// self-service login link) — the admin server already has this via
+	// config.Config.ApprovalPortalBaseURL for admin-triggered approval
+	// e-mails, but PhishingServer only carries config.PhishServer, so it
+	// needs its own copy through WithApprovalPortalBaseURL.
+	approvalPortalBaseURL string
+}
+
+// WithApprovalPortalBaseURL sets the public base URL the phishing server
+// uses to build links in e-mails it sends itself, such as the client
+// portal's self-service login link (see controllers/client_portal.go).
+func WithApprovalPortalBaseURL(url string) PhishingServerOption {
+	return func(ps *PhishingServer) {
+		ps.approvalPortalBaseURL = url
+	}
 }
 
 // NewPhishingServer returns a new instance of the phishing server with
@@ -132,6 +148,7 @@ func (ps *PhishingServer) registerRoutes() {
 	router.HandleFunc("/{path:.*}/replied", ps.RepliedHandler)
 	router.HandleFunc("/replied", ps.RepliedHandler)
 	ps.registerApprovalPortalRoutes(router)
+	ps.registerClientPortalRoutes(router)
 	router.HandleFunc("/{path:.*}", ps.PhishHandler)
 
 	// Setup GZIP compression

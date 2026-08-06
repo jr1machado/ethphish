@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EthPhish Client Portal</title>
+    <style>
+        body { font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; background: #f4f6f8; color: #1c222b; margin: 0; }
+        .wrap { max-width: 480px; margin: 80px auto; padding: 0 20px; }
+        .card { background: linear-gradient(135deg, #1e3a5f 0%, #17998a 100%); border-radius: 10px; padding: 30px 35px; color: #fff; text-align: center; box-shadow: 0 4px 18px rgba(0,0,0,.18); }
+        .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.85); }
+        h1 { margin: 10px 0; font-size: 26px; }
+        p { line-height: 1.5; }
+        form { margin-top: 15px; }
+        input[type=email] { width: 100%; box-sizing: border-box; padding: 10px 12px; border: none; border-radius: 4px; font-family: inherit; margin-bottom: 12px; }
+        button { padding: 10px 24px; border: none; border-radius: 4px; background: #fff; color: #1e3a5f; font-weight: 700; cursor: pointer; }
+        .message { background: rgba(255,255,255,.15); border-radius: 6px; padding: 12px 14px; margin-top: 15px; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="card">
+            <span class="eyebrow">EthPhish Client Portal</span>
+            <h1>Sign in</h1>
+            <p>Enter the e-mail address you were registered with as a contract approver. We'll send you a login link.</p>
+            <form method="POST" action="/portal/login">
+                <input type="hidden" name="gorilla.csrf.Token" value="{{.Token}}">
+                <input type="email" name="email" placeholder="you@company.com" required autofocus>
+                <button type="submit">Send login link</button>
+            </form>
+            {{if .Message}}<div class="message">{{.Message}}</div>{{end}}
+        </div>
+    </div>
+</body>
+
+</html>

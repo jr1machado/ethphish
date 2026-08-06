@@ -253,7 +253,7 @@ func loadCampaignSetCampaigns(css *CampaignSetSummary) error {
 	unique := make(map[string]recipientFlags)
 
 	for j := range campaigns {
-		recipientStats, total, err := buildRecipientStats(campaigns[j].Id)
+		recipientStats, total, err := buildRecipientStats(db, campaigns[j].Id)
 		if err != nil {
 			log.Error(err)
 			return err

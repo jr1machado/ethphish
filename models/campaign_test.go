@@ -560,7 +560,7 @@ func (s *ModelsSuite) TestGetCampaignStatsRegression(c *check.C) {
 	err = AddEvent(&Event{Email: "test2@example.com", Message: EventOpened}, campaign.Id)
 	c.Assert(err, check.Equals, nil)
 
-	stats, err := getCampaignStats(campaign.Id)
+	stats, err := getCampaignStats(db, campaign.Id)
 	c.Assert(err, check.Equals, nil)
 
 	c.Assert(stats.Total, check.Equals, int64(4)) // 4 targets from createCampaignDependencies
