@@ -1,6 +1,41 @@
 # Changelog
 
-All notable changes to Anglerphish are documented here.
+Changes below `[1.3.0]` belong to the upstream Anglerphish project this repo
+was forked from. EthPhish entries are documented separately in
+[RELEASE_NOTES.md](RELEASE_NOTES.md); see also [ISSUES_CONHECIDOS.md](ISSUES_CONHECIDOS.md).
+
+---
+
+## EthPhish [0.3.0] - 2026-08-06
+
+Multitenant foundation and delivery reliability. Full detail in
+[RELEASE_NOTES.md](RELEASE_NOTES.md).
+
+### Added
+- Multitenant foundation (`tenants`, `companies`, `tenant_users`,
+  `TenantScope`) with tenant scoping applied to campaigns, groups, targets,
+  templates, landing pages, SMTP, SMS, IMAP, webhooks and reports.
+- PostgreSQL Row-Level Security (`FORCE ROW LEVEL SECURITY`) enforced through
+  a restricted runtime role (`ethphish_app`), verified by a cross-tenant
+  integration test against a real database.
+- Durable RabbitMQ queue (`mail.send`) for campaign email dispatch, with a
+  TTL/DLX retry queue and a terminal dead-letter queue, independent of the
+  existing SMTP-level retry.
+- Admin UI reachable through a dedicated reverse-proxy listener (9444),
+  separate from the public campaign web surface (9443).
+
+### Fixed
+- Campaign webhook delivery resolved the owning tenant before dispatch
+  instead of broadcasting to every tenant's webhooks.
+- `MigrationsPath` now includes the driver-specific `migrations`
+  subdirectory, fixing a "no SQL migrations found" boot failure.
+
+---
+
+## EthPhish [0.2.0] - 2026-08-05
+
+PostgreSQL transition release. Full detail in the `v0.2.0` tag and
+`RELEASE_NOTES.md` at that revision.
 
 ---
 
