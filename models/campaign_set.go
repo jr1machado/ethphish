@@ -466,7 +466,7 @@ func PostCampaignTx(c *Campaign, uid int64, tx *gorm.DB) error {
 		// This is similar to GetTargets but uses the transaction
 		var targets []Target
 		err = tx.Table("targets").
-			Select("targets.id, targets.email, targets.phone, targets.first_name, targets.last_name, targets.position, targets.custom").
+			Select("targets.id, targets.email, targets.phone, targets.first_name, targets.last_name, targets.position, targets.custom, targets.department, targets.company, targets.city, targets.state, targets.country, targets.unit, targets.tags").
 			Joins("left join group_targets gt ON targets.id = gt.target_id").
 			Where("gt.group_id=?", group.Id).
 			Scan(&targets).Error
