@@ -6,6 +6,45 @@ was forked from. EthPhish entries are documented separately in
 
 ---
 
+## EthPhish [0.5.0] - 2026-08-06
+
+Client portal expanded into an ongoing dashboard, plus a full training and
+quiz subsystem. Full detail in [RELEASE_NOTES.md](RELEASE_NOTES.md).
+
+### Added
+- Client portal (`/portal/*`): tenant-wide campaign dashboard with
+  aggregate-only stats, CSV export, and self-service e-mail login (15-min
+  single-use token) — no longer gated on a pending approval to get in.
+  Shares session with the existing approval portal.
+- Training and quiz subsystem: sequential HTML lessons, an optional quiz
+  mixing multiple-choice and true/false questions, configurable pass
+  percentage and attempt limit.
+- Two delivery paths for a training: direct assignment to a group (admin
+  "Trainings" page, automatic e-mail per target) and a "teachable moment"
+  trigger on a campaign (click/submit/both, configured in the campaign
+  wizard) that redirects a target straight into the training after the
+  matching event fires.
+- New tenant-wide (not per-admin-user) model functions
+  `GetCampaignSummariesForTenantAllUsers`/`GetCampaignSummaryForTenantAllUsers`/
+  `GetAnySMTPForTenant`, backing the client portal's broader visibility.
+
+### Fixed
+- `getCampaignStats`/`buildRecipientStats` used the package-level `db`
+  instead of the transaction handle passed into `withTenantTransaction`,
+  deadlocking under a connection pool sized for one (surfaced by a new
+  test against the sqlite3 test database, but the same latent bug in the
+  already-shipped `GetCampaignSummariesForTenant`/`GetCampaignSummaryForTenant`).
+- `QuizQuestion.Options`/`CorrectAnswer` were tagged `json:"-"`, silently
+  dropping them on every admin-authored quiz question.
+- `QuizQuestion.OptionsList()` had a pointer receiver, uncallable from
+  `html/template` on a non-addressable range variable — quiz forms
+  rendered with no questions and no visible error.
+- Training's public routes (`/training/*`) were missing the CSRF-key
+  empty-value fallback present in the two sibling portal route
+  registrations, 403'ing every request.
+
+---
+
 ## EthPhish [0.4.0] - 2026-08-06
 
 Contract-gated campaign approval workflow, expanded participant profiles,
