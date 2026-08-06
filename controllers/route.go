@@ -114,6 +114,8 @@ func (as *AdminServer) Start() {
 		reportsConfig = &as.fullConfig.ReportsConf
 	}
 	api.InitReportServices(reportsConfig)
+	api.InitContractServices(reportsConfig)
+	api.InitApprovalServices(as.fullConfig)
 
 	if as.worker != nil {
 		go as.worker.Start()
@@ -192,6 +194,8 @@ func (as *AdminServer) registerRoutes() {
 	router.HandleFunc("/campaign_sets", mid.Use(as.CampaignSets, mid.RequireLogin))
 	router.HandleFunc("/templates", mid.Use(as.Templates, mid.RequireLogin))
 	router.HandleFunc("/groups", mid.Use(as.Groups, mid.RequireLogin))
+	router.HandleFunc("/contracts", mid.Use(as.Contracts, mid.RequireLogin))
+	router.HandleFunc("/approvals", mid.Use(as.ApprovalsCenter, mid.RequireLogin))
 	router.HandleFunc("/landing_pages", mid.Use(as.LandingPages, mid.RequireLogin))
 	router.HandleFunc("/sending_profiles", mid.Use(as.SendingProfiles, mid.RequireLogin))
 	router.HandleFunc("/non_campaign_reports", mid.Use(as.NonCampaignReports, mid.RequireLogin))
@@ -315,6 +319,22 @@ func (as *AdminServer) Groups(w http.ResponseWriter, r *http.Request) {
 	params := newTemplateParams(r)
 	params.Title = "Users & Groups"
 	getTemplate(w, "groups").ExecuteTemplate(w, "base", params)
+}
+
+// Contracts handles the default path and template execution for the
+// contracts admin page.
+func (as *AdminServer) Contracts(w http.ResponseWriter, r *http.Request) {
+	params := newTemplateParams(r)
+	params.Title = "Contracts"
+	getTemplate(w, "contracts").ExecuteTemplate(w, "base", params)
+}
+
+// ApprovalsCenter handles the default path and template execution for the
+// Central de Aprovações admin page.
+func (as *AdminServer) ApprovalsCenter(w http.ResponseWriter, r *http.Request) {
+	params := newTemplateParams(r)
+	params.Title = "Approval Center"
+	getTemplate(w, "approvals").ExecuteTemplate(w, "base", params)
 }
 
 // LandingPages handles the default path and template execution

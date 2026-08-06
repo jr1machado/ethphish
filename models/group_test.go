@@ -18,6 +18,36 @@ func (s *ModelsSuite) TestPostGroup(c *check.C) {
 	c.Assert(g.Targets[0].Email, check.Equals, "test@example.com")
 }
 
+func (s *ModelsSuite) TestPostGroupProfileFields(c *check.C) {
+	g := Group{Name: "Test Profile Fields Group"}
+	g.Targets = []Target{Target{BaseRecipient: BaseRecipient{
+		Email:      "profile@example.com",
+		FirstName:  "Ada",
+		LastName:   "Lovelace",
+		Department: "Engineering",
+		Company:    "Acme Corp",
+		City:       "London",
+		State:      "England",
+		Country:    "UK",
+		Unit:       "Platform",
+		Tags:       "vip,executive",
+	}}}
+	g.UserId = 1
+	err := PostGroup(&g)
+	c.Assert(err, check.Equals, nil)
+
+	got, err := GetGroup(g.Id, g.UserId)
+	c.Assert(err, check.Equals, nil)
+	c.Assert(got.Targets, check.HasLen, 1)
+	c.Assert(got.Targets[0].Department, check.Equals, "Engineering")
+	c.Assert(got.Targets[0].Company, check.Equals, "Acme Corp")
+	c.Assert(got.Targets[0].City, check.Equals, "London")
+	c.Assert(got.Targets[0].State, check.Equals, "England")
+	c.Assert(got.Targets[0].Country, check.Equals, "UK")
+	c.Assert(got.Targets[0].Unit, check.Equals, "Platform")
+	c.Assert(got.Targets[0].Tags, check.Equals, "vip,executive")
+}
+
 func (s *ModelsSuite) TestPostGroupWithPhone(c *check.C) {
 	g := Group{Name: "Test Phone Group"}
 	g.Targets = []Target{Target{BaseRecipient: BaseRecipient{

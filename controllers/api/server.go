@@ -130,6 +130,19 @@ func (as *Server) registerRoutes() {
 	router.HandleFunc("/reports/campaign_set", as.GenerateCampaignSetReport)   // Campaign Set Reports endpoint (sync)
 	router.HandleFunc("/reports/dependencies", as.CheckDependencies)           // Check Python dependencies endpoint
 	router.HandleFunc("/reports/dependencies/install", as.InstallDependencies) // Install Python dependencies endpoint
+
+	// Contracts and approval workflow (Sprint 6)
+	router.HandleFunc("/contracts/", as.Contracts)
+	router.HandleFunc("/contracts/{id:[0-9]+}", as.ContractID)
+	router.HandleFunc("/contracts/{id:[0-9]+}/versions", as.ContractVersions)
+	router.HandleFunc("/contracts/{id:[0-9]+}/versions/{versionId:[0-9]+}/download", as.ContractVersionDownload)
+	router.HandleFunc("/contracts/{id:[0-9]+}/approvers", as.ContractApprovers)
+	router.HandleFunc("/contracts/{id:[0-9]+}/approvers/{approverId:[0-9]+}", as.ContractApproverID)
+	router.HandleFunc("/approvals/", as.Approvals)
+	router.HandleFunc("/approvals/{id:[0-9]+}", as.ApprovalID)
+	router.HandleFunc("/approvals/{id:[0-9]+}/resend", as.ApprovalResend)
+	router.HandleFunc("/approvals/{id:[0-9]+}/comments", as.ApprovalComment)
+	router.HandleFunc("/approvals/{id:[0-9]+}/export", as.ApprovalExport)
 	as.handler = router
 }
 

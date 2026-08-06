@@ -59,12 +59,19 @@ type Target struct {
 // BaseRecipient contains the fields for a single recipient. This is the base
 // struct used in members of groups and campaign results.
 type BaseRecipient struct {
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Position  string `json:"position"`
-	Custom    string `json:"custom"`
+	Email      string `json:"email"`
+	Phone      string `json:"phone"`
+	FirstName  string `json:"first_name"`
+	LastName   string `json:"last_name"`
+	Position   string `json:"position"`
+	Custom     string `json:"custom"`
+	Department string `json:"department"`
+	Company    string `json:"company"`
+	City       string `json:"city"`
+	State      string `json:"state"`
+	Country    string `json:"country"`
+	Unit       string `json:"unit"`
+	Tags       string `json:"tags"`
 }
 
 // FormatAddress returns the email address to use in the "To" header of the email
@@ -157,7 +164,7 @@ func GetGroupsForTenant(tenantID, uid int64) ([]Group, error) {
 func getTargetsForTenant(tx *gorm.DB, groupID, tenantID int64) ([]Target, error) {
 	ts := []Target{}
 	err := tx.Table("targets").
-		Select("targets.id, targets.tenant_id, targets.email, targets.phone, targets.first_name, targets.last_name, targets.position, targets.custom").
+		Select("targets.id, targets.tenant_id, targets.email, targets.phone, targets.first_name, targets.last_name, targets.position, targets.custom, targets.department, targets.company, targets.city, targets.state, targets.country, targets.unit, targets.tags").
 		Joins("JOIN group_targets gt ON targets.id = gt.target_id").
 		Where("gt.group_id=? AND targets.tenant_id=?", groupID, tenantID).
 		Scan(&ts).Error
@@ -789,7 +796,7 @@ func UpdateTarget(tx *gorm.DB, target Target) error {
 // GetTargets performs a many-to-many select to get all the Targets for a Group
 func GetTargets(gid int64) ([]Target, error) {
 	ts := []Target{}
-	err := db.Table("targets").Select("targets.id, targets.email, targets.phone, targets.first_name, targets.last_name, targets.position, targets.custom").Joins("left join group_targets gt ON targets.id = gt.target_id").Where("gt.group_id=?", gid).Scan(&ts).Error
+	err := db.Table("targets").Select("targets.id, targets.email, targets.phone, targets.first_name, targets.last_name, targets.position, targets.custom, targets.department, targets.company, targets.city, targets.state, targets.country, targets.unit, targets.tags").Joins("left join group_targets gt ON targets.id = gt.target_id").Where("gt.group_id=?", gid).Scan(&ts).Error
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"group_id": gid,

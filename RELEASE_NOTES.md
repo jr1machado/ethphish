@@ -1,107 +1,138 @@
-# Release notes — EthPhish v0.3.0
+# Release notes — EthPhish v0.4.0
 
 Data: 2026-08-06
 
 ## Resumo
 
-Release de fundação multitenant e confiabilidade de entrega do EthPhish,
-fork independente para testes éticos de phishing e quishing. Introduz
-isolamento de dados por tenant garantido no banco (PostgreSQL RLS) e o
-primeiro caminho de entrega assíncrono durável (RabbitMQ) para e-mail de
-campanha. Não é uma autorização para uso em produção pública nem para
-portal de clientes self-service — ver [Issues conhecidos](ISSUES_CONHECIDOS.md).
+Release do workflow de contratos e aprovação de campanhas, com portal
+próprio para o cliente aprovador, além de perfis de participantes ampliados
+e identidade visual EthPhish. Fecha a lacuna apontada em
+[ISSUES_CONHECIDOS.md](ISSUES_CONHECIDOS.md) da v0.3.0: "multitenancy ainda
+não é auto-serviço" — agora existe um fluxo formal de contrato → escopo →
+aprovação → liberação de campanha, auditável e com evidência exportável.
+Não é ainda um portal de onboarding self-service completo — ver Issues
+conhecidos desta versão.
 
-Substitui as notas da v0.2.0 (tag `v0.2.0`, commit `335b5b9`) como release
-corrente; a v0.2.0 permanece disponível no histórico do repositório.
+Substitui as notas da v0.3.0 (tag `v0.3.0`, commit `b4f54c9`) como release
+corrente; as notas anteriores permanecem disponíveis no histórico do
+repositório e na tag correspondente.
 
 ## Entregas
 
-### Multitenancy e isolamento de dados
+### Workflow de contratos e aprovação de campanhas
 
-- fundação multitenant: tabelas `tenants`, `companies`, `tenant_users` e
-  contexto de requisição tipado `TenantScope`, que bloqueia qualquer fluxo
-  tenant-owned sem `tenant_id`/`user_id` validados;
-- escopo por tenant aplicado a campanhas, grupos, alvos, templates, landing
-  pages, perfis SMTP, perfis e templates SMS, IMAP, webhooks e relatórios,
-  incluindo fluxos fora de requisição HTTP (monitor IMAP em background, MFA
-  por SMS, geração de relatórios em fila);
-- entrega de webhook de campanha corrigida para resolver o tenant dono antes
-  do disparo, em vez de notificar webhooks de todos os tenants (bug
-  pré-existente identificado durante os testes de integração desta sprint);
-- **PostgreSQL RLS** com `FORCE ROW LEVEL SECURITY` em toda tabela
-  tenant-owned, policy `tenant_isolation` baseada em `ethphish.tenant_id`
-  (via `set_config` local à transação, em `withTenantTransaction`);
-- role de runtime restrito **`ethphish_app`** (sem `SUPERUSER`/`BYPASSRLS`),
-  criado por migration dedicada; o role privilegiado `ethphish` fica restrito
-  ao passo `db-migrate` do Compose, que roda e termina antes do `server`
-  subir — necessário porque o role padrão do Postgres é superusuário e
-  ignora RLS mesmo com `FORCE ROW LEVEL SECURITY`;
-- teste de integração que abre uma segunda conexão sob o role restrito e
-  comprova, em PostgreSQL real, que leitura/escrita cruzada entre tenants é
-  bloqueada — não apenas configurada.
+- **Contratos**: cadastro com nome, cliente e status (draft/active/archived),
+  responsáveis por aprovação (nome + e-mail) e versionamento de documento —
+  cada upload de escopo gera uma nova `ContractVersion`, sem sobrescrever a
+  anterior (`models/contract.go`, `controllers/api/contract.go`,
+  `templates/contracts.html`).
+- **Central de Aprovações**: emissão de aprovação por versão do contrato,
+  status (pending/approved/rejected/changes_requested/expired), prazo de
+  expiração, reenvio de lembrete, thread de comentários entre admin e
+  cliente, e **exportação de evidência em JSON** (contrato + versão +
+  request + thread completo) para auditoria (`models/approval.go`,
+  `controllers/api/approval.go`).
+- **Token de aprovação de uso único**: link mágico com token opaco de 32
+  caracteres, armazenado apenas como hash SHA-256, amarrado a uma versão
+  exata do contrato e a um aprovador específico — a identidade do aprovador
+  vem do token, nunca de input do cliente. Expira por tempo e por decisão
+  (uma vez decidido, o link para de funcionar mesmo dentro da validade).
+- **Portal do cliente aprovador**: rotas públicas `/approvals/*` no servidor
+  de phishing (porta 9443), completamente segregadas do painel
+  administrativo — sessão própria (`ethphish_client`, cookie `HttpOnly`,
+  `Secure`, `SameSite=Lax`), CSRF dedicado, sem exigir conta nem senha do
+  cliente. Ações: aprovar, rejeitar, solicitar alterações, comentar.
+- **Bloqueio de campanha por aprovação, em dois pontos**: a criação da
+  campanha (`Campaign.Validate`) e o **envio pelo worker** (`processCampaigns`
+  / `processSMSCampaigns`) checam `IsCampaignApproved` — uma campanha já
+  enfileirada é **pausada no disparo**, não só barrada na criação, se a
+  aprovação expirar ou for invalidada por uma nova versão do contrato
+  enquanto ela esperava na fila.
+- **Invalidação automática por nova versão**: subir uma nova versão do
+  documento do contrato invalida, para fins de gate de campanha, qualquer
+  aprovação anterior — a aprovação é sempre amarrada à versão exata que foi
+  revisada.
+- Cron de lembrete/expiração (`approvals.StartScheduler`, iniciado junto do
+  admin server) expira automaticamente aprovações pendentes vencidas e
+  reenvia lembretes para as que passam do intervalo configurado, sem
+  intervenção manual.
 
-### Confiabilidade de entrega
+### Participantes e grupos
 
-- disparo de e-mail de campanha passa de canal Go in-process para
-  publicação por `MailLog` na fila durável `mail.send` (RabbitMQ), consumida
-  por um pool de goroutines dentro do próprio processo `server`;
-- fila de retry por TTL + dead-letter-exchange (sem plugin RabbitMQ) e fila
-  morta terminal para falhas de processamento Go (crash de consumidor, banco
-  inacessível), independente do retry SMTP já existente via backoff em
-  `MailLog`;
-- redelivery idempotente: sucesso e erro removem a linha `MailLog`, então
-  uma mensagem redelivrada sem linha correspondente é um ack sem efeito;
-- fallback automático para o canal direto quando `ETHPHISH_RABBITMQ_URL` não
-  está definido — nenhum teste existente foi afetado;
-- SMS e geração de relatórios permanecem, por decisão de escopo, no caminho
-  de polling de banco já existente.
+- Novos campos de perfil no cadastro de participante: departamento, empresa,
+  cidade, estado, país, unidade e tags (`BaseRecipient`).
+- Reconhecimento automático dessas colunas na importação CSV, mais
+  **importação XLSX no navegador** (SheetJS vendorizado, sem round-trip ao
+  servidor para conversão), com validação e preview antes de confirmar.
+- Filtros dinâmicos por empresa, departamento, cidade, estado, país e tag na
+  tela de Grupos.
 
-### Exposição administrativa
+### Identidade visual
 
-- admin UI passa a ser roteável pelo proxy reverso, em listener HTTPS
-  dedicado (9444), segregado da web pública de campanhas (9443); a porta
-  3333 do servidor nunca é publicada diretamente no host;
-- correção de roteamento: uma tentativa inicial de montar o admin sob
-  `/admin` no listener 9443 quebrou navegação pós-login (a aplicação emite
-  redirects e links raiz-relativos); a solução final usa listener próprio.
+- Logos e temas claro/escuro próprios do EthPhish, substituindo o seletor de
+  tema herdado do Anglerphish/Gophish.
 
-### Plataforma
+### Plataforma e configuração
 
-- migrations executadas por um passo `db-migrate` dedicado no Compose, com
-  o role privilegiado, antes do `server` iniciar;
-- correção de bug de boot: `MigrationsPath` resolvia para `db/db_<driver>`
-  mas os arquivos SQL vivem em `db/db_<driver>/migrations`, causando falha
-  "no SQL migrations found" após reconstrução da árvore de trabalho;
-- RabbitMQ 4 com credenciais de desenvolvimento dedicadas (o usuário `guest`
-  padrão só aceita conexões locais ao container).
+- Novas variáveis: `ETHPHISH_PHISH_CSRF_KEY` (protege o CSRF do portal do
+  cliente — sem ela, cada restart do processo gera uma chave nova e invalida
+  formulários de aprovação em voo) e `ETHPHISH_APPROVAL_PORTAL_BASE_URL`
+  (base pública usada para montar o link mágico nos e-mails de aprovação).
+- Emissão de certificado sob demanda liberada para acesso externo nas
+  portas 9443/9444 do reverse proxy (antes restrita a loopback/rede
+  interna em alguns cenários de desenvolvimento).
+- Correção de segurança: criação de usuário passa a **exigir** escopo de
+  tenant explícito — o fallback anterior que criava usuário sem tenant
+  associado foi removido.
+
+### Correções encontradas na validação manual desta sprint
+
+Ver relatório completo com evidências (prints e export real de aprovação)
+em [`INFO/Validacao-S05-S06/RELATORIO.md`](INFO/Validacao-S05-S06/RELATORIO.md).
+
+- A listagem de contratos (`GetContractsForTenant`) não trazia versões nem
+  aprovadores — a tela nunca mostrava o botão "Request Approval" embora o
+  backend estivesse correto (só o endpoint de contrato único trazia os
+  dados). Corrigido com preload na listagem.
+- Emitir ou reenviar uma aprovação sempre reportava sucesso na tela, mesmo
+  quando nenhum e-mail saía por falta de perfil SMTP no tenant. Agora a
+  resposta inclui quantos aprovadores foram de fato notificados, e a UI
+  avisa quando o número é menor que o total.
+- Reenvio manual de lembrete não gravava `last_reminder_sent_at` (diferente
+  do cron automático) — a coluna "Last Reminder" na Central de Aprovações
+  nunca era atualizada. Corrigido para gravar em ambos os caminhos.
 
 ## Integrações
 
-| Integração | Estado v0.3.0 | Uso |
+| Integração | Estado v0.4.0 | Uso |
 | --- | --- | --- |
-| PostgreSQL | ativo, com RLS forçado | dados, migrations, isolamento por tenant |
-| RabbitMQ | ativo no caminho crítico de e-mail | fila `mail.send` + retry/DLQ; SMS e relatórios ainda em polling |
-| Caddy | ativo no Compose | TLS e proxy web + admin (9443/9444) |
-| OIDC | recurso herdado configurável | autenticação administrativa, mediante IdP aprovado |
-| SMTP, SMS, IMAP | recursos herdados, agora escopados por tenant | apenas em escopo autorizado; não configurados automaticamente |
-| GitHub Actions | workflow incluído | exige publicação do workflow e token com escopo `workflow` |
+| PostgreSQL | ativo, com RLS forçado (herdado da v0.3.0) | dados, migrations, isolamento por tenant, agora incluindo `contracts`, `contract_versions`, `contract_approvers`, `approval_requests`, `approval_comments`, `client_users`, `client_sessions` |
+| RabbitMQ | ativo no caminho crítico de e-mail (herdado da v0.3.0) | fila `mail.send` + retry/DLQ; e-mails de aprovação/lembrete/decisão usam o mesmo mecanismo de envio das campanhas (perfil SMTP do tenant), não uma fila própria |
+| Caddy | ativo no Compose | TLS e proxy web + admin (9443/9444); 9443 agora também serve o portal do cliente aprovador, sem porta nova |
+| OIDC | recurso herdado configurável | autenticação administrativa; **não** cobre o login do cliente aprovador, que usa magic link, não SSO |
+| SMTP | recurso herdado, agora também usado pelo workflow de aprovação | e-mails de solicitação de aprovação, lembrete e notificação de decisão dependem de um perfil SMTP configurado no tenant — sem ele, a aprovação é criada mas ninguém é notificado (ver Issues conhecidos) |
+| GitHub Actions | workflow de release corrigido para nomear artefatos/binários como `ethphish-*` em vez de `anglerphish-*`/`gophish` | build e publicação de release |
 
 ## Upgrade e rollback
 
 1. Faça backup com `./scripts/backup-postgres.sh` antes de atualizar.
-2. Atualize a imagem e execute `docker compose up -d`; o passo `db-migrate`
-   roda automaticamente antes do `server` subir.
-3. Confirme que o `server` conecta como `ethphish_app` (não `ethphish`) —
-   uma DSN apontando para o role privilegiado desativa a proteção de RLS
-   silenciosamente.
-4. Consulte `docker compose logs server db-migrate` para migrations e
-   health.
+2. Aplique as novas migrations (`20260806100000_add_contracts_approvals`,
+   `20260806110000_add_approver_tokens`) via o passo `db-migrate` do Compose
+   — automático em `docker compose up -d`.
+3. Defina `ETHPHISH_APPROVAL_PORTAL_BASE_URL` com a URL pública real do
+   servidor de phishing (porta 9443) e `ETHPHISH_PHISH_CSRF_KEY` com uma
+   chave fixa antes de expor o portal do cliente em produção — sem a
+   segunda, um restart invalida qualquer aprovação em andamento.
+4. Configure ao menos um perfil SMTP por tenant que for usar o workflow de
+   aprovação; sem ele, o botão "Request Approval" cria o request mas não
+   notifica ninguém (a UI agora avisa isso, ver Correções acima).
 5. Em falha, interrompa a atualização e restaure somente em banco isolado a
    partir do dump validado; não execute migrations `down` diretamente em
    produção.
 
 ## Limitações de release
 
-Consulte [ISSUES_CONHECIDOS.md](ISSUES_CONHECIDOS.md). Workers distribuídos
-em nodes externos, extensão da fila durável para SMS/relatórios, portal de
-clientes self-service e operação externa permanecem fora desta release.
+Consulte [ISSUES_CONHECIDOS.md](ISSUES_CONHECIDOS.md). Conta de emergência
+(gap remanescente do escopo do Sprint 5), auditoria de login do portal do
+cliente, workers distribuídos em nodes externos e portal de onboarding
+self-service completo permanecem fora desta release.

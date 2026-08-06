@@ -1,0 +1,59 @@
+{{define "body"}}
+<div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
+    <div class="row">
+        <h1 class="page-header">Approval Center</h1>
+    </div>
+    <div id="flashes" class="row"></div>
+    <div id="loading">
+        <i class="fa fa-spinner fa-spin fa-4x"></i>
+    </div>
+    <div id="emptyMessage" class="row" style="display:none;">
+        <div class="alert alert-info">No approval requests yet. Issue one from the Contracts page.</div>
+    </div>
+    <div class="row">
+        <table id="approvalTable" class="table" style="display:none;">
+            <thead>
+                <tr>
+                    <th>Contract</th>
+                    <th>Client</th>
+                    <th>Version</th>
+                    <th>Status</th>
+                    <th>Requested</th>
+                    <th>Expires</th>
+                    <th>Last Reminder</th>
+                    <th class="no-sort"></th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Approval detail modal -->
+<div class="modal fade" id="approvalModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document" style="width: 70% !important;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="approvalModalLabel">Approval Request</h4>
+            </div>
+            <div class="modal-body">
+                <div id="approvalStatus"></div>
+                <hr />
+                <h5>Comments</h5>
+                <div id="approvalComments"></div>
+                <div class="form-group" style="margin-top:10px;">
+                    <textarea class="form-control" id="newComment" rows="2" placeholder="Add a comment"></textarea>
+                    <button type="button" class="btn btn-default" style="margin-top:8px;" onclick="addComment()"><i class="fa fa-comment"></i> Add Comment</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" onclick="exportEvidence()"><i class="fa fa-download"></i> Export Evidence</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}} {{define "scripts"}}
+<script src="/js/dist/app/approvals.min.js"></script>
+{{end}}

@@ -1,9 +1,12 @@
-# EthPhish v0.3.0
+# EthPhish v0.4.0
 
-EthPhish é um fork independente do Anglerphish 1.3.0, evoluído como uma
-plataforma corporativa completa para testes éticos, autorizados e mensuráveis
-de phishing e quishing (simulações via QR Code). Não é uma distribuição nem um
-produto oficial do Anglerphish ou do Gophish.
+EthPhish é um **fork independente** do Anglerphish 1.3.0 (que por sua vez
+deriva do Gophish), evoluído como uma **plataforma corporativa completa e
+autônoma** para testes éticos, autorizados e mensuráveis de phishing e
+quishing (simulações via QR Code). Não é uma distribuição, um branch, nem um
+produto oficial do Anglerphish ou do Gophish — segue caminho próprio de
+versionamento, arquitetura, banco de dados, identidade visual e governança de
+release, documentado neste arquivo e em [CHANGELOG.md](CHANGELOG.md).
 
 O produto apoia programas de conscientização, GRC e redução de risco humano.
 Toda campanha deve possuir autorização, escopo, período, público e domínios
@@ -18,32 +21,54 @@ mede a evolução após treinamentos e dá governança sobre campanhas de
 conscientização, com trilha de aprovação e isolamento de dados por cliente ou
 unidade de negócio.
 
+Desde a v0.4.0, essa governança deixou de ser apenas um processo manual ao
+redor da ferramenta e virou **controle técnico dentro dela**: nenhuma
+campanha vinculada a um contrato sai — nem na criação, nem no disparo pelo
+worker — sem uma aprovação formal, registrada com hora, autor e escopo exato
+aceito, e revogada automaticamente se o escopo mudar depois. Isso transforma
+"confiamos que o time seguiu o processo" em "o sistema não deixa sair sem
+aprovação documentada".
+
 **Casos de uso**
 
 - Programas recorrentes de security awareness com métricas comparáveis entre
   ciclos e áreas.
 - Validação de controles humanos antes de auditorias (ISO 27001, PCI-DSS,
-  LGPD/GDPR) com evidência exportável.
+  LGPD/GDPR) com evidência exportável — incluindo, agora, o próprio
+  comprovante de aprovação do escopo testado (quem aprovou, quando, qual
+  versão exata do documento).
 - Avaliação de risco por diretoria, unidade de negócio ou aquisição recente
   (due diligence de segurança pós-M&A).
 - Simulações aprovadas de resposta a incidente real, sem reexpor a
   organização a coleta de credenciais verdadeiras.
 - Provedores de serviços gerenciados (MSSPs) operando múltiplos clientes na
   mesma plataforma, com isolamento de dados garantido no banco (RLS), não
-  apenas na aplicação.
+  apenas na aplicação — e agora com um **portal próprio para o cliente final
+  aprovar o escopo** sem precisar de conta no sistema nem acesso ao painel do
+  MSSP.
+- Times jurídico/compliance que precisam assinar formalmente o escopo de um
+  pentest de engenharia social antes da execução, com registro de quem
+  autorizou e qual versão do contrato foi de fato testada — sem depender de
+  e-mail avulso ou planilha de controle paralela.
 
 **Dores que o EthPhish resolve**
 
 - Falta de métricas consistentes e comparáveis de comportamento humano ao
   longo do tempo.
 - Campanhas sem controle de escopo, autorização ou rastreabilidade de
-  aprovação — risco jurídico e reputacional para quem executa o teste.
+  aprovação — risco jurídico e reputacional para quem executa o teste. Agora
+  isso é bloqueado no próprio sistema, não apenas em processo.
+- "A campanha já estava aprovada quando foi criada, mas o escopo mudou
+  depois e ninguém percebeu" — resolvido pela invalidação automática da
+  aprovação quando uma nova versão do contrato é enviada, e pela checagem
+  repetida no momento do disparo, não só na criação.
 - Relatórios manuais, sem padronização, difíceis de apresentar a auditoria ou
   ao conselho.
 - Ausência de uma base técnica que suporte múltiplos clientes/áreas sem risco
   de vazamento cruzado de dados entre eles.
 - Dependência de operação manual do time de segurança para disparar e
-  monitorar cada campanha.
+  monitorar cada campanha, e para perseguir aprovadores por e-mail —
+  lembretes e expiração de aprovações pendentes agora rodam sozinhos.
 
 A plataforma preserva as fronteiras éticas em todas as camadas: mede eventos
 de interação autorizados (abertura, clique, submissão simulada, reporte) e
@@ -83,11 +108,27 @@ Desde a base Anglerphish 1.3.0:
   diretamente no host;
 - Docker multi-stage, usuário não-root, capabilities removidas e health
   checks em todos os serviços do Compose;
-- TLS autoassinado para desenvolvimento, roteado pelo Caddy;
+- TLS autoassinado para desenvolvimento, roteado pelo Caddy, com emissão sob
+  demanda liberada para acesso externo nas portas 9443/9444;
 - CI com formatação, vet, testes, integração PostgreSQL, secret scan,
   vulnerabilidades, scan de imagem e SBOM;
 - backup PostgreSQL, restore ensaiado e documentação de segurança,
-  arquitetura e governança.
+  arquitetura e governança;
+- **workflow de contrato e aprovação de campanha** (v0.4.0): contratos
+  versionados, aprovadores nomeados, aprovação por magic link de uso único,
+  Central de Aprovações com comentários e exportação de evidência, portal
+  próprio para o cliente aprovador (sem conta no sistema), e bloqueio de
+  campanha reforçado tanto na criação quanto no disparo pelo worker;
+- **perfis de participante ampliados** (v0.4.0): departamento, empresa,
+  cidade, estado, país, unidade e tags, com importação CSV/XLSX no
+  navegador, validação, preview e filtros dinâmicos na tela de Grupos;
+- **identidade visual própria** (v0.4.0): logos e temas claro/escuro
+  EthPhish, substituindo o seletor herdado do Anglerphish/Gophish;
+- correção de segurança: criação de usuário passa a exigir `tenant_id`
+  explícito, sem fallback para usuário sem tenant;
+- todos os binários, artefatos de release e nomes de arquivo gerados pela
+  aplicação (relatórios, workflow de release do GitHub) usam **EthPhish**,
+  nunca `anglerphish`/`gophish` — ver [Convenção de nomes](#convenção-de-nomes).
 
 ## Arquitetura
 
@@ -116,13 +157,21 @@ Desde a base Anglerphish 1.3.0:
                           └────────┘ └─────────────┘  └───────────────┘
 ```
 
-Na v0.3.0, o servidor central concentra admin, API, web de campanhas,
-scheduler e um **pool de goroutines interno** que consome a fila
-`mail.send`; não existe ainda um processo worker externo ao servidor. A
-separação real em worker nodes (identidade e segredos próprios, sem acesso
-direto ao PostgreSQL, comunicação por AMQP TLS 5671) permanece como
-arquitetura-alvo — RabbitMQ hoje já está no caminho crítico de entrega de
-e-mail, mas isso não deve ser confundido com workers distribuídos.
+Na v0.4.0, o servidor central concentra admin, API, web de campanhas,
+**portal do cliente aprovador**, scheduler (incluindo o cron de
+lembrete/expiração de aprovações) e um **pool de goroutines interno** que
+consome a fila `mail.send`; não existe ainda um processo worker externo ao
+servidor. A separação real em worker nodes (identidade e segredos próprios,
+sem acesso direto ao PostgreSQL, comunicação por AMQP TLS 5671) permanece
+como arquitetura-alvo — RabbitMQ hoje já está no caminho crítico de entrega
+de e-mail (campanha **e** aprovação), mas isso não deve ser confundido com
+workers distribuídos.
+
+O portal do cliente aprovador (`/approvals/*`) é servido pelo mesmo processo
+e pela mesma porta pública (9443) da web de campanhas — não abre porta nova
+— mas com sessão, cookie e proteção CSRF completamente separados do restante
+do tráfego dessa porta (que, por natureza, não tem CSRF, já que recebe POSTs
+cross-origin legítimos de formulários de captura de credenciais simuladas).
 
 Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architecture.md).
 
@@ -130,8 +179,8 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
 
 | Componente | Papel | Portas | Exposição |
 | --- | --- | --- | --- |
-| `reverse-proxy` (Caddy) | TLS público e roteamento web + admin | 9443/TCP web, 9444/TCP admin, publicadas no host | somente para redes autorizadas (VPN/Zero Trust); nunca publicar 9444 na internet aberta |
-| `server` | administração, API, campanhas, worker interno de e-mail | 3333/TCP admin, 8080/TCP web | somente redes Docker internas (`admin_internal`, `application_internal`) |
+| `reverse-proxy` (Caddy) | TLS público e roteamento web + admin + portal do cliente | 9443/TCP web (campanhas + portal `/approvals/*`), 9444/TCP admin, publicadas no host | somente para redes autorizadas (VPN/Zero Trust); nunca publicar 9444 na internet aberta; 9443 pode ser exposta ao público-alvo autorizado de uma campanha e aos aprovadores de contrato |
+| `server` | administração, API, campanhas, portal do cliente aprovador, worker interno de e-mail | 3333/TCP admin, 8080/TCP web (inclui `/approvals/*`) | somente redes Docker internas (`admin_internal`, `application_internal`) |
 | `db-migrate` | aplica migrations com role privilegiado, roda uma vez e termina | nenhuma publicada | rede de dados interna, sem rede externa |
 | `postgres` | dados, RLS e migrations | 5432/TCP | rede de dados interna (`data_internal`) |
 | `rabbitmq` | fila durável de e-mail em produção | 5672/TCP AMQP, 5671/TCP AMQP TLS (worker nodes futuros) | rede de dados interna |
@@ -157,7 +206,7 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
   CPU e memória por node devem ser monitorados para decidir quando adicionar
   o próximo node.
 
-## Recursos implementados até a v0.3.0
+## Recursos implementados até a v0.4.0
 
 **Herdados do baseline Anglerphish 1.3.0** (ver detalhamento completo em
 [FEATURES.md](FEATURES.md)):
@@ -198,6 +247,33 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
 - CI/CD e controles de supply chain descritos em
   [release notes](RELEASE_NOTES.md).
 
+**Entregues na v0.4.0 (EthPhish)**:
+
+- **contratos**: cadastro, status (draft/active/archived), aprovadores
+  nomeados (nome + e-mail) e versionamento de documento de escopo — cada
+  upload gera uma nova versão, sem sobrescrever a anterior;
+- **workflow de aprovação**: emissão de aprovação por versão do contrato,
+  magic link de token único (hash SHA-256, nunca armazenado em texto claro),
+  expiração por tempo e por decisão, reenvio de lembrete, thread de
+  comentários e **exportação de evidência em JSON** auditável;
+- **cron de lembrete/expiração** rodando junto do admin server, sem
+  intervenção manual;
+- **portal do cliente aprovador**, público em `/approvals/*` na porta 9443,
+  com sessão e CSRF próprios, sem exigir conta nem senha do cliente —
+  identidade vem do token do magic link;
+- **bloqueio de campanha por aprovação em dois pontos**: na criação
+  (`Campaign.Validate`) e no **disparo pelo worker** (`processCampaigns`,
+  `processSMSCampaigns`), então uma campanha já enfileirada é pausada, não
+  só barrada, se a aprovação expirar ou for invalidada enquanto esperava;
+- **invalidação automática por nova versão**: subir um novo documento do
+  contrato invalida qualquer aprovação anterior para fins de gate;
+- **perfis de participante ampliados**: departamento, empresa, cidade,
+  estado, país, unidade e tags, reconhecidos na importação CSV, com
+  **importação XLSX no navegador** (SheetJS vendorizado), validação, preview
+  e filtros dinâmicos na tela de Grupos;
+- **identidade visual EthPhish**: logos e temas claro/escuro próprios;
+- correção de segurança: criação de usuário exige `tenant_id` explícito.
+
 ## Funções e recursos futuros
 
 - workers externos ao processo do servidor, distribuídos em nodes próprios,
@@ -206,8 +282,16 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
   ainda em polling de banco, fora de escopo desta release por design);
 - transactional outbox para garantir publicação exatamente-uma-vez entre
   commit de banco e publicação na fila;
-- portal de clientes multitenant self-service, com fluxo auditável de
-  aprovação de campanhas por tenant;
+- conta de emergência (break-glass) para acesso administrativo quando o IdP
+  OIDC estiver indisponível — gap identificado no escopo do Sprint 5, ainda
+  não implementado (ver [Issues conhecidos](ISSUES_CONHECIDOS.md));
+- log de auditoria dedicado para tentativas de login do portal do cliente
+  aprovador (sucesso/falha), hoje não confirmado em log estruturado;
+- aviso proativo na tela de Contratos quando o tenant não tem perfil SMTP
+  configurado, antes de tentar emitir uma aprovação;
+- portal de clientes multitenant **self-service completo** (onboarding
+  próprio, gestão de múltiplos contratos, recuperação de acesso), além do
+  fluxo atual de magic link emitido pelo admin;
 - dashboard operacional e executivo, métricas de capacidade e
   observabilidade (backlog, DLQ, latência, node saúde);
 - bundles versionados de campanhas e conteúdos de treinamento, com
@@ -225,7 +309,13 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
 - campanhas sem aprovação formal, domínios fora do escopo ou público não
   autorizado;
 - exposição pública do painel administrativo fora de rede autorizada
-  (VPN/Zero Trust), mesmo estando disponível via proxy reverso.
+  (VPN/Zero Trust), mesmo estando disponível via proxy reverso;
+- o workflow de contrato/aprovação **não substitui** um instrumento jurídico
+  de contratação — é evidência operacional de que um responsável nomeado
+  aprovou um escopo técnico específico, não uma assinatura contratual;
+- onboarding self-service de clientes (cadastro próprio, gestão de conta) —
+  o portal do cliente aprovador só aceita quem já foi cadastrado como
+  aprovador de um contrato pelo admin.
 
 ## Requisitos
 
@@ -243,9 +333,38 @@ produção com `ETHPHISH_DB_DRIVER=sqlite3`.
 
 Referência de capacidade inicial: servidor central com 2 vCPU, 4 GB RAM e
 100 GB de disco (eleve a memória para 8 GB antes de ampliar volume de
-tenants, eventos ou relatórios); cada worker futuro com 1 vCPU, 1 GB RAM e
-50 GB de disco. A capacidade real deve ser dimensionada por volume, taxa de
-entrega aprovada, retenção de eventos e geração de relatórios.
+tenants, eventos ou relatórios; eleve o disco se o volume de documentos de
+contrato for alto — cada versão de contrato é um arquivo em
+`/var/lib/ethphish/contracts`, sem expurgo automático ainda); cada worker
+futuro com 1 vCPU, 1 GB RAM e 50 GB de disco. A capacidade real deve ser
+dimensionada por volume, taxa de entrega aprovada, retenção de eventos e
+geração de relatórios.
+
+## Convenção de nomes
+
+Todo artefato **gerado ou publicado** por este projeto usa o nome
+**EthPhish**, nunca `anglerphish` ou `gophish`:
+
+- binários de release (`ethphish`, `ethphish.exe`) e pacotes ZIP publicados
+  (`ethphish-vX.Y.Z-<os>-<bits>.zip`) via
+  [`.github/workflows/release.yml`](.github/workflows/release.yml);
+- título do GitHub Release (`EthPhish vX.Y.Z`);
+- nome de arquivo de relatórios exportados pela aplicação (ex.:
+  `ethphish_campaign_set_report.xlsx`);
+- tags de versão (`vX.Y.Z`) e entradas de [CHANGELOG.md](CHANGELOG.md).
+
+Exceções deliberadas, que **permanecem** referenciando o upstream por
+design — não são inconsistência, são rastreabilidade de proveniência:
+
+- o arquivo `ANGLERPHISH_VERSION` e a variável interna
+  `AnglerPhishVersion`/`ANGLERPHISH_ENCRYPTION_KEY`, que registram a versão
+  do Anglerphish 1.3.0 usada como base do fork (ver
+  [CHANGELOG.md](CHANGELOG.md): "changes below `[1.3.0]` belong to the
+  upstream Anglerphish project");
+- valores de exemplo em testes automatizados (`auth/oidc_test.go`,
+  `controllers/controllers_test.go`) que usam `anglerphish-admins` como
+  nome de grupo OIDC fictício — são dados de teste, não identidade do
+  produto.
 
 ## Desenvolvimento local
 
@@ -281,8 +400,11 @@ Consulte [desenvolvimento local](docs/runbooks/local-development.md),
 - [Status das Sprints 0–2](docs/project/sprint-0-2-status.md)
 - [Sprint 02 — endurecimento PostgreSQL](docs/project/sprint-02.md)
 - [Sprint 04 — fundação multitenant](docs/project/sprint-04.md)
+- [Sprint 05 — escopo planejado](INFO/Sprint05.md) /
+  [Sprint 06 — escopo planejado](INFO/Sprint06.md)
+- [Validação manual Sprint 05/06 — evidências e correções](INFO/Validacao-S05-S06/RELATORIO.md)
 - [Funções e recursos herdados detalhados](FEATURES.md)
-- [Release notes v0.3.0](RELEASE_NOTES.md)
+- [Release notes v0.4.0](RELEASE_NOTES.md)
 - [Issues conhecidos](ISSUES_CONHECIDOS.md)
 
 ## Licença e atribuição

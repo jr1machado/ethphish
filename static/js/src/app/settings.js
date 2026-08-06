@@ -390,20 +390,19 @@ $(document).ready(function () {
     // Migrate old boolean setting if it exists
     var oldDarkTheme = localStorage.getItem('gophish.use_dark_theme');
     var currentTheme = localStorage.getItem('gophish.theme');
-    
+
     if (!currentTheme && oldDarkTheme !== null) {
-        // Migrate: if old setting was true, use dark-teal theme
-        currentTheme = JSON.parse(oldDarkTheme) ? 'dark-teal' : 'default';
+        currentTheme = JSON.parse(oldDarkTheme) ? 'ethphish-dark' : 'ethphish-light';
         localStorage.setItem('gophish.theme', currentTheme);
         localStorage.removeItem('gophish.use_dark_theme');
     } else if (!currentTheme) {
-        currentTheme = 'default';
+        currentTheme = 'ethphish-light';
         localStorage.setItem('gophish.theme', currentTheme);
     }
-    
+
     // Set the dropdown to the current theme
     $("#theme_selector").val(currentTheme);
-    
+
     // Handle theme changes
     $("#theme_selector").on('change', function () {
         var selectedTheme = this.value;
@@ -411,33 +410,10 @@ $(document).ready(function () {
         applyTheme(selectedTheme);
     });
 
-    // Apply theme function
+    // Delegates to the shared implementation in gophish.js so there is a
+    // single place that knows the current theme class names.
     function applyTheme(theme) {
-        // Remove all theme classes
-        document.body.classList.remove('dark-theme', 'crimson-theme', 'goldphish-theme', 'lagocephalus-theme', 'light-sand-theme', 'matrix-theme');
-        document.documentElement.classList.remove('dark-theme', 'crimson-theme', 'goldphish-theme', 'lagocephalus-theme', 'light-sand-theme', 'matrix-theme');
-
-        // Apply the selected theme
-        if (theme === 'dark-teal') {
-            document.body.classList.add('dark-theme');
-            document.documentElement.classList.add('dark-theme');
-        } else if (theme === 'dark-crimson') {
-            document.body.classList.add('crimson-theme');
-            document.documentElement.classList.add('crimson-theme');
-        } else if (theme === 'goldphish') {
-            document.body.classList.add('goldphish-theme');
-            document.documentElement.classList.add('goldphish-theme');
-        } else if (theme === 'lagocephalus') {
-            document.body.classList.add('lagocephalus-theme');
-            document.documentElement.classList.add('lagocephalus-theme');
-        } else if (theme === 'light-sand') {
-            document.body.classList.add('light-sand-theme');
-            document.documentElement.classList.add('light-sand-theme');
-        } else if (theme === 'matrix') {
-            document.body.classList.add('matrix-theme');
-            document.documentElement.classList.add('matrix-theme');
-        }
-        // 'default' theme has no classes, so light theme is shown
+        window.applyTheme(theme);
     }
 
     // Apply theme on page load

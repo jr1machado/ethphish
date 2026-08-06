@@ -355,9 +355,11 @@ function launch() {
                 var urlparam = urlParamValue !== '' ? urlParamValue : 'rid';
                 
                 // Common campaign properties
+                var contractId = $("#contract").val();
                 campaign = {
                     name: $("#name").val(),
                     type: campaignType,
+                    contract_id: contractId ? parseInt(contractId) : null,
                     url: $("#url").val(),
                     urlparam: urlparam,
                     qrsize: $("#qrsize").val(),
@@ -597,6 +599,16 @@ function resendFailed(campaignId) {
 window.resendFailed = resendFailed;
 
 function setupOptions() {
+    // Load contracts (optional approval gate for this campaign)
+    api.contracts.get()
+        .success(function (contracts) {
+            var select = $("#contract")
+            select.find("option[value!='']").remove()
+            contracts.forEach(function (c) {
+                select.append($("<option>").val(c.id).text(c.name + " (" + c.client_name + ")"))
+            })
+        })
+
     api.groups.summary()
         .success(function (summaries) {
             groups = summaries.groups.filter(function (g) { return !g.locked; })

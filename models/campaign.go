@@ -42,6 +42,7 @@ type Campaign struct {
 	QRSize        string      `json:"qrsize" sql:"column:qr_size"`
 	HTTPAuth      bool        `json:"basicauth" sql:"column:http_auth"`
 	CampaignSetId int64       `json:"campaign_set_id,omitempty"`
+	ContractID    *int64      `json:"contract_id,omitempty" gorm:"column:contract_id"`
 }
 
 // CampaignResults is a struct representing the results from a campaign
@@ -257,6 +258,12 @@ func (c *Campaign) Validate() error {
 				}
 			}
 		}
+	}
+
+	if ok, err := campaignApprovalOK(c.ContractID); err != nil {
+		return err
+	} else if !ok {
+		return ErrApprovalRequired
 	}
 
 	return nil

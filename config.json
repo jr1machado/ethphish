@@ -9,7 +9,8 @@
 		"listen_url": "0.0.0.0:80",
 		"use_tls": false,
 		"cert_path": "example.crt",
-		"key_path": "example.key"
+		"key_path": "example.key",
+		"csrf_key": ""
 	},
 	"db_name": "postgres",
 	"db_path": "host=postgres port=5432 user=ethphish dbname=ethphish sslmode=disable",
@@ -22,6 +23,7 @@
 	"reports": {
 		"storage_path": "./reports/files"
 	},
+	"approval_portal_base_url": "",
 	"oidc": {
 		"enabled": false,
 		"issuer": "",

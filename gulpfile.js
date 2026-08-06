@@ -38,7 +38,8 @@ vendorjs = function () {
             vendor_directory + 'select2.min.js',
             vendor_directory + 'core.min.js',
             vendor_directory + 'highcharts.js',
-            vendor_directory + 'ua-parser.min.js'
+            vendor_directory + 'ua-parser.min.js',
+            vendor_directory + 'xlsx.full.min.js'
         ])
         .pipe(concat('vendor.js'))
         .pipe(rename({
@@ -57,6 +58,8 @@ scripts = function () {
             app_directory + 'campaign_sets.js',
             app_directory + 'dashboard.js',
             app_directory + 'groups.js',
+            app_directory + 'contracts.js',
+            app_directory + 'approvals.js',
             app_directory + 'landing_pages.js',
             app_directory + 'sending_profiles.js',
             app_directory + 'settings.js',

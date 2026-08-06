@@ -11,8 +11,74 @@
 }
 
 .navbar-logo {
-    margin: 4px 0px;
+    margin: 4px 8px 4px 0px;
     float: left;
+    height: 32px;
+    width: auto;
+}
+
+/* ============================================
+   Dashboard hero banner
+   ============================================ */
+.eth-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin: 10px 0 25px 0;
+    padding: 30px 35px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--dark-accent, #1e3a5f) 0%, #17998a 100%);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+}
+
+.eth-hero-text {
+    max-width: 640px;
+}
+
+.eth-hero-eyebrow {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.85);
+    margin-bottom: 10px;
+}
+
+.eth-hero-title {
+    margin: 0 0 10px 0;
+    color: #ffffff;
+    font-size: 32px;
+    font-weight: 700;
+}
+
+.eth-hero-subtitle {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+.eth-hero-cta {
+    flex-shrink: 0;
+}
+
+.eth-btn-launch {
+    background-color: #ffffff;
+    border-color: #ffffff;
+    color: #17998a;
+    font-weight: 700;
+    padding: 12px 26px;
+    border-radius: 6px;
+}
+
+.eth-btn-launch:hover,
+.eth-btn-launch:focus {
+    background-color: #eafffb;
+    border-color: #eafffb;
+    color: #12766b;
 }
 
 #navbar-login {
