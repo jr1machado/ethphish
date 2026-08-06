@@ -73,6 +73,7 @@ services:
       - /config
       - /data
     networks:
+      - admin_internal
       - application_internal
 
   postgres:
