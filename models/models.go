@@ -219,7 +219,7 @@ func Setup(c *config.Config) error {
 			adminUser.ApiKey = auth.GenerateSecureKey(auth.APIKeyLength)
 		}
 
-		err = db.Save(&adminUser).Error
+		err = PutUser(&adminUser)
 		if err != nil {
 			log.Error(err)
 			return err

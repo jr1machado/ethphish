@@ -20,9 +20,15 @@ type bulkDeleteRequest struct {
 // Campaigns returns a list of campaigns if requested via GET.
 // If requested via POST, APICampaigns creates a new campaign and returns a reference to it.
 func (as *Server) Campaigns(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
+	userID := ctx.Get(r, "user_id").(int64)
 	switch {
 	case r.Method == "GET":
-		cs, err := models.GetCampaigns(ctx.Get(r, "user_id").(int64))
+		cs, err := models.GetCampaignsForTenant(scope.TenantID, userID)
 		if err != nil {
 			log.Error(err)
 		}
@@ -39,7 +45,7 @@ func (as *Server) Campaigns(w http.ResponseWriter, r *http.Request) {
 			JSONResponse(w, models.Response{Success: false, Message: "No campaign IDs provided"}, http.StatusBadRequest)
 			return
 		}
-		count, err := models.DeleteCampaigns(req.Ids, ctx.Get(r, "user_id").(int64))
+		count, err := models.DeleteCampaignsForTenant(req.Ids, scope.TenantID, ctx.Get(r, "user_id").(int64))
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error deleting campaigns"}, http.StatusInternalServerError)
 			return
@@ -54,7 +60,7 @@ func (as *Server) Campaigns(w http.ResponseWriter, r *http.Request) {
 			JSONResponse(w, models.Response{Success: false, Message: "Invalid JSON structure"}, http.StatusBadRequest)
 			return
 		}
-		err = models.PostCampaign(&c, ctx.Get(r, "user_id").(int64))
+		err = models.PostCampaignForTenant(&c, scope.TenantID, ctx.Get(r, "user_id").(int64))
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusBadRequest)
 			return
@@ -71,9 +77,14 @@ func (as *Server) Campaigns(w http.ResponseWriter, r *http.Request) {
 
 // CampaignsSummary returns the summary for the current user's campaigns
 func (as *Server) CampaignsSummary(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	switch {
 	case r.Method == "GET":
-		cs, err := models.GetCampaignSummaries(ctx.Get(r, "user_id").(int64))
+		cs, err := models.GetCampaignSummariesForTenant(scope.TenantID, ctx.Get(r, "user_id").(int64))
 		if err != nil {
 			log.Error(err)
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
@@ -86,9 +97,14 @@ func (as *Server) CampaignsSummary(w http.ResponseWriter, r *http.Request) {
 // Campaign returns details about the requested campaign. If the campaign is not
 // valid, APICampaign returns null.
 func (as *Server) Campaign(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
-	c, err := models.GetCampaign(id, ctx.Get(r, "user_id").(int64))
+	c, err := models.GetCampaignForTenant(id, scope.TenantID, ctx.Get(r, "user_id").(int64))
 	if err != nil {
 		log.Error(err)
 		JSONResponse(w, models.Response{Success: false, Message: "Campaign not found"}, http.StatusNotFound)
@@ -98,7 +114,7 @@ func (as *Server) Campaign(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "GET":
 		JSONResponse(w, c, http.StatusOK)
 	case r.Method == "DELETE":
-		err = models.DeleteCampaign(id)
+		err = models.DeleteCampaignForTenant(id, scope.TenantID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error deleting campaign"}, http.StatusInternalServerError)
 			return
@@ -110,9 +126,14 @@ func (as *Server) Campaign(w http.ResponseWriter, r *http.Request) {
 // CampaignResults returns just the results for a given campaign to
 // significantly reduce the information returned.
 func (as *Server) CampaignResults(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
-	cr, err := models.GetCampaignResults(id, ctx.Get(r, "user_id").(int64))
+	cr, err := models.GetCampaignResultsForTenant(id, scope.TenantID, ctx.Get(r, "user_id").(int64))
 	if err != nil {
 		log.Error(err)
 		JSONResponse(w, models.Response{Success: false, Message: "Campaign not found"}, http.StatusNotFound)
@@ -126,11 +147,16 @@ func (as *Server) CampaignResults(w http.ResponseWriter, r *http.Request) {
 
 // CampaignSummary returns the summary for a given campaign.
 func (as *Server) CampaignSummary(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
 	switch {
 	case r.Method == "GET":
-		cs, err := models.GetCampaignSummary(id, ctx.Get(r, "user_id").(int64))
+		cs, err := models.GetCampaignSummaryForTenant(id, scope.TenantID, ctx.Get(r, "user_id").(int64))
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
 				JSONResponse(w, models.Response{Success: false, Message: "Campaign not found"}, http.StatusNotFound)
@@ -147,11 +173,16 @@ func (as *Server) CampaignSummary(w http.ResponseWriter, r *http.Request) {
 // CampaignComplete effectively "ends" a campaign.
 // Future phishing emails clicked will return a simple "404" page.
 func (as *Server) CampaignComplete(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
 	switch {
 	case r.Method == "GET":
-		err := models.CompleteCampaign(id, ctx.Get(r, "user_id").(int64))
+		err := models.CompleteCampaignForTenant(id, scope.TenantID, ctx.Get(r, "user_id").(int64))
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error completing campaign"}, http.StatusInternalServerError)
 			return

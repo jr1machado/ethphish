@@ -182,7 +182,7 @@ func (im *Monitor) start(ctx context.Context) {
 			for _, dbuser := range dbusers {
 				if _, ok := usermap[dbuser.Id]; !ok { // If we don't currently have a running Go routine for this user, check if they have IMAP settings
 					// Check if user has IMAP settings before creating monitor
-					imapSettings, err := models.GetIMAP(dbuser.Id)
+					imapSettings, err := getUserIMAPSettings(dbuser.Id)
 					if err != nil {
 						log.Debugf("Error checking IMAP settings for user %s: %v", dbuser.Username, err)
 						continue
@@ -201,6 +201,25 @@ func (im *Monitor) start(ctx context.Context) {
 			time.Sleep(10 * time.Second) // Every ten seconds we check if a new user has been created or if existing users added IMAP settings
 		}
 	}
+}
+
+// getUserIMAPSettings collects IMAP configurations for a user across every
+// tenant they're granted access to. Tenant-scoped queries run one per grant
+// so PostgreSQL RLS sees the session variable set for the owning tenant.
+func getUserIMAPSettings(uid int64) ([]models.IMAP, error) {
+	grants, err := models.GetTenantUsers(uid)
+	if err != nil {
+		return nil, err
+	}
+	settings := []models.IMAP{}
+	for _, grant := range grants {
+		im, err := models.GetIMAPForTenant(grant.TenantID, uid)
+		if err != nil {
+			return nil, err
+		}
+		settings = append(settings, im...)
+	}
+	return settings, nil
 }
 
 // monitor will continuously login to the IMAP settings associated to the supplied user id (if the user account has IMAP settings, and they're enabled.)
@@ -228,7 +247,7 @@ func monitor(uid int64, ctx context.Context) {
 			}
 
 			// 2. Check if user has IMAP settings.
-			imapSettings, err := models.GetIMAP(uid)
+			imapSettings, err := getUserIMAPSettings(uid)
 			if err != nil {
 				log.Error(err)
 				break
@@ -238,7 +257,7 @@ func monitor(uid int64, ctx context.Context) {
 			imapChecked := false
 			for _, im := range imapSettings {
 				// Get fresh configuration from database to ensure we have the latest enabled state
-				freshConfig, err := models.GetIMAPById(im.Id, im.UserId)
+				freshConfig, err := models.GetIMAPByIdForTenant(im.Id, im.TenantID, im.UserId)
 				if err != nil {
 					log.Errorf("Failed to get fresh IMAP config for ID %d: %v", im.Id, err)
 					continue
@@ -278,7 +297,7 @@ func monitorIMAPConfig(im models.IMAP, ctx context.Context) {
 	// Double-check that this configuration is still enabled
 	// This is to catch any race conditions where the config was disabled
 	// after we started processing it
-	freshestConfig, err := models.GetIMAPById(im.Id, im.UserId)
+	freshestConfig, err := models.GetIMAPByIdForTenant(im.Id, im.TenantID, im.UserId)
 	if err != nil {
 		log.Errorf("Failed to get fresh IMAP config for ID %d: %v", im.Id, err)
 		return

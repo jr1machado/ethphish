@@ -14,9 +14,15 @@ import (
 
 // SMSTemplates handles requests for the /api/sms_templates/ endpoint
 func (as *Server) SMSTemplates(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
+	userID := ctx.Get(r, "user_id").(int64)
 	switch {
 	case r.Method == "GET":
-		ts, err := models.GetSMSTemplates(ctx.Get(r, "user_id").(int64))
+		ts, err := models.GetSMSTemplatesForTenant(scope.TenantID, userID)
 		if err != nil {
 			log.Error(err)
 		}
@@ -35,7 +41,7 @@ func (as *Server) SMSTemplates(w http.ResponseWriter, r *http.Request) {
 			JSONResponse(w, models.Response{Success: false, Message: "No SMS template IDs provided"}, http.StatusBadRequest)
 			return
 		}
-		err = models.DeleteSMSTemplates(req.IDs, ctx.Get(r, "user_id").(int64))
+		err = models.DeleteSMSTemplatesForTenant(req.IDs, scope.TenantID, userID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error deleting SMS templates: " + err.Error()}, http.StatusInternalServerError)
 			return
@@ -51,19 +57,20 @@ func (as *Server) SMSTemplates(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Check to make sure the name is unique
-		_, err = models.GetSMSTemplateByName(t.Name, ctx.Get(r, "user_id").(int64))
+		_, err = models.GetSMSTemplateByNameForTenant(t.Name, scope.TenantID, userID)
 		if err != gorm.ErrRecordNotFound {
 			JSONResponse(w, models.Response{Success: false, Message: "SMS template name already in use"}, http.StatusConflict)
 			log.Error(err)
 			return
 		}
-		t.UserId = ctx.Get(r, "user_id").(int64)
+		t.UserId = userID
+		t.TenantID = scope.TenantID
 		err = t.Validate()
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusBadRequest)
 			return
 		}
-		err = models.PostSMSTemplate(&t)
+		err = models.PostSMSTemplateForTenant(&t, scope.TenantID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
 			return
@@ -75,9 +82,15 @@ func (as *Server) SMSTemplates(w http.ResponseWriter, r *http.Request) {
 // SMSTemplate contains functions to handle the GET'ing, DELETE'ing, and PUT'ing
 // of a SMS template object
 func (as *Server) SMSTemplate(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
+	userID := ctx.Get(r, "user_id").(int64)
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
-	t, err := models.GetSMSTemplate(id, ctx.Get(r, "user_id").(int64))
+	t, err := models.GetSMSTemplateForTenant(id, scope.TenantID, userID)
 	if err != nil {
 		JSONResponse(w, models.Response{Success: false, Message: "SMS template not found"}, http.StatusNotFound)
 		return
@@ -86,7 +99,7 @@ func (as *Server) SMSTemplate(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "GET":
 		JSONResponse(w, t, http.StatusOK)
 	case r.Method == "DELETE":
-		err = models.DeleteSMSTemplate(id, ctx.Get(r, "user_id").(int64))
+		err = models.DeleteSMSTemplateForTenant(id, scope.TenantID, userID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error deleting SMS template"}, http.StatusInternalServerError)
 			return
@@ -102,13 +115,14 @@ func (as *Server) SMSTemplate(w http.ResponseWriter, r *http.Request) {
 			JSONResponse(w, models.Response{Success: false, Message: "/:id and /:template_id mismatch"}, http.StatusBadRequest)
 			return
 		}
-		t.UserId = ctx.Get(r, "user_id").(int64)
+		t.UserId = userID
+		t.TenantID = scope.TenantID
 		err = t.Validate()
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusBadRequest)
 			return
 		}
-		err = models.PutSMSTemplate(&t)
+		err = models.PutSMSTemplateForTenant(&t, scope.TenantID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error updating SMS template"}, http.StatusInternalServerError)
 			return

@@ -1,12 +1,16 @@
-# Issues conhecidos — EthPhish v0.2.0
+# Issues conhecidos — EthPhish v0.3.0
 
 ## Limitações técnicas
 
 | Item | Impacto | Mitigação/planejamento |
 | --- | --- | --- |
-| Workers são internos ao servidor | não há escala independente nem isolamento por node | transactional outbox e workers AMQP nas próximas releases |
-| RabbitMQ ainda não processa jobs | broker está provisionado, mas não integra entrega | implementar filas, idempotência, retry e DLQ |
-| Multitenancy ainda não existe | não é adequado para portal de clientes ou dados compartilhados | tenant obrigatório, RLS e testes negativos antes de uso multicliente |
+| Workers ainda são internos ao servidor | RabbitMQ já está no caminho crítico de e-mail, mas o consumidor é um pool de goroutines no processo `server`; não há escala independente nem isolamento por node | extrair worker node externo, AMQP TLS 5671, sem acesso a banco/painel |
+| SMS e relatórios não usam a fila durável | permanecem no polling de banco já existente; não têm o retry/DLQ que o e-mail ganhou nesta release | estender o padrão `mail.send` para SMS e geração de relatórios |
+| Sem transactional outbox | a publicação na fila não é atômica com o commit do `MailLog`; uma falha entre os dois pode duplicar ou perder a publicação (o retry SMTP por backoff mitiga perda, não duplicação) | implementar outbox transacional antes de tratar o e-mail como exactly-once |
+| Multitenancy ainda não é auto-serviço | RLS e escopo por tenant existem e são testados, mas não há portal de cliente, fluxo de onboarding ou aprovação de campanha por tenant fora do admin interno | portal de clientes e fluxo auditável de aprovação em release futura |
+| RLS depende de disciplina de configuração | qualquer DSN de runtime apontando para o role privilegiado `ethphish` (em vez de `ethphish_app`) desativa a proteção de RLS silenciosamente, pois superusuário ignora `FORCE ROW LEVEL SECURITY` | validar a DSN de runtime em cada deploy; considerar um check de partida que rejeite conexão como role privilegiado |
+| Sessões sem tenant enxergam todas as linhas | intencional — preserva workers legados (monitor IMAP externo, drenagem da fila de relatórios, limpeza agendada) que ainda não migraram para `TenantScope` | migrar os processos remanescentes para sessões com `ethphish.tenant_id` definido, ou documentar formalmente cada exceção |
+| Admin UI publicada em porta própria (9444) | reduz risco de path-based leakage, mas ainda é publicada no host pelo Compose de desenvolvimento | em produção, restringir 9444 a rede administrativa/VPN via firewall/security group, nunca expor na internet aberta |
 | Reconciliação ampliada de importação | o importador aprovado compara contagens e preservação de IDs; hash de conteúdo, órfãos e equivalência de timestamps ainda não são gate automático | concluir ETH-307 antes de importar dados reais |
 | SQLite em ferramenta/testes legados | o runtime e a imagem não incluem SQLite; o driver permanece somente no importador e na caracterização | remover após aposentadoria das bases legadas |
 | GORM v1 e frontend legado | dependências com manutenção limitada | modernização incremental após estabilização funcional |
@@ -20,9 +24,15 @@
 - Não usar com destinatários, domínios ou provedores sem autorização formal.
 - Não registrar credenciais reais; a adequação completa dos fluxos legados será
   verificada antes de piloto.
-- Não expor o painel administrativo na internet.
+- Não expor o painel administrativo (porta 9444) na internet; restringir a
+  rede administrativa/VPN mesmo estando disponível via proxy reverso.
 - Não habilitar ignorar erros de certificado SMTP/IMAP fora de teste autorizado.
-- Não tratar a presença de RabbitMQ como arquitetura distribuída já concluída.
+- Não tratar a presença de RabbitMQ e RLS como arquitetura multitenant
+  distribuída e self-service já concluída — permanece uso interno,
+  administrado pelo time de segurança.
+- Não conectar o runtime do `server` com o role privilegiado de migrations
+  (`ethphish`); use sempre o role restrito (`ethphish_app`) para preservar o
+  isolamento por RLS.
 
 ## Suporte
 

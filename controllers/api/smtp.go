@@ -15,9 +15,15 @@ import (
 
 // SendingProfiles handles requests for the /api/smtp/ endpoint
 func (as *Server) SendingProfiles(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
+	userID := ctx.Get(r, "user_id").(int64)
 	switch {
 	case r.Method == "GET":
-		ss, err := models.GetSMTPs(ctx.Get(r, "user_id").(int64))
+		ss, err := models.GetSMTPsForTenant(scope.TenantID, userID)
 		if err != nil {
 			log.Error(err)
 		}
@@ -32,15 +38,16 @@ func (as *Server) SendingProfiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Check to make sure the name is unique
-		_, err = models.GetSMTPByName(s.Name, ctx.Get(r, "user_id").(int64))
+		_, err = models.GetSMTPByNameForTenant(s.Name, scope.TenantID, userID)
 		if err != gorm.ErrRecordNotFound {
 			JSONResponse(w, models.Response{Success: false, Message: "SMTP name already in use"}, http.StatusConflict)
 			log.Error(err)
 			return
 		}
 		s.ModifiedDate = time.Now().UTC()
-		s.UserId = ctx.Get(r, "user_id").(int64)
-		err = models.PostSMTP(&s)
+		s.UserId = userID
+		s.TenantID = scope.TenantID
+		err = models.PostSMTPForTenant(&s, scope.TenantID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
 			return
@@ -52,9 +59,15 @@ func (as *Server) SendingProfiles(w http.ResponseWriter, r *http.Request) {
 // SendingProfile contains functions to handle the GET'ing, DELETE'ing, and PUT'ing
 // of a SMTP object
 func (as *Server) SendingProfile(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
+	userID := ctx.Get(r, "user_id").(int64)
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
-	s, err := models.GetSMTP(id, ctx.Get(r, "user_id").(int64))
+	s, err := models.GetSMTPForTenant(id, scope.TenantID, userID)
 	if err != nil {
 		JSONResponse(w, models.Response{Success: false, Message: "SMTP not found"}, http.StatusNotFound)
 		return
@@ -63,7 +76,7 @@ func (as *Server) SendingProfile(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "GET":
 		JSONResponse(w, s, http.StatusOK)
 	case r.Method == "DELETE":
-		err = models.DeleteSMTP(id, ctx.Get(r, "user_id").(int64))
+		err = models.DeleteSMTPForTenant(id, scope.TenantID, userID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error deleting SMTP"}, http.StatusInternalServerError)
 			return
@@ -85,8 +98,9 @@ func (as *Server) SendingProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.ModifiedDate = time.Now().UTC()
-		s.UserId = ctx.Get(r, "user_id").(int64)
-		err = models.PutSMTP(&s)
+		s.UserId = userID
+		s.TenantID = scope.TenantID
+		err = models.PutSMTPForTenant(&s, scope.TenantID, userID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error updating page"}, http.StatusInternalServerError)
 			return

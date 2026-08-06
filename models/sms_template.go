@@ -3,6 +3,8 @@ package models
 import (
 	"errors"
 	"time"
+
+	"github.com/jinzhu/gorm"
 )
 
 // ErrSMSTemplateNameNotSpecified indicates the name for the SMS template was not specified
@@ -14,6 +16,7 @@ var ErrSMSTemplateTextNotSpecified = errors.New("SMS template text not specified
 // SMSTemplate contains the attributes for an SMS template
 type SMSTemplate struct {
 	Id           int64     `json:"id"`
+	TenantID     int64     `json:"-" gorm:"column:tenant_id;default:1"`
 	UserId       int64     `json:"-"`
 	Name         string    `json:"name"`
 	From         string    `json:"from" gorm:"column:from_sender"` // Optional sender override
@@ -92,4 +95,82 @@ func DeleteSMSTemplates(ids []int64, uid int64) error {
 // TableName specifies the database tablename for Gorm to use
 func (t SMSTemplate) TableName() string {
 	return "sms_templates"
+}
+
+// GetSMSTemplatesForTenant returns the SMS templates owned by the given
+// tenant and user.
+func GetSMSTemplatesForTenant(tenantID, uid int64) ([]SMSTemplate, error) {
+	ts := []SMSTemplate{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND user_id=?", tenantID, uid).Find(&ts).Error
+	})
+	return ts, err
+}
+
+// GetSMSTemplateForTenant returns the SMS template scoped to the given
+// tenant.
+func GetSMSTemplateForTenant(id, tenantID, uid int64) (SMSTemplate, error) {
+	t := SMSTemplate{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND user_id=? AND id=?", tenantID, uid, id).Find(&t).Error
+	})
+	return t, err
+}
+
+// GetSMSTemplateByNameForTenant prevents duplicate-name checks from leaking
+// information across tenants.
+func GetSMSTemplateByNameForTenant(n string, tenantID, uid int64) (SMSTemplate, error) {
+	t := SMSTemplate{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND user_id=? AND name=?", tenantID, uid, n).Find(&t).Error
+	})
+	return t, err
+}
+
+// PostSMSTemplateForTenant creates a new SMS template inside a tenant-bound
+// transaction.
+func PostSMSTemplateForTenant(t *SMSTemplate, tenantID int64) error {
+	t.CharCount = len(t.Text)
+	t.ModifiedDate = time.Now().UTC()
+	t.TenantID = tenantID
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Save(t).Error
+	})
+}
+
+// PutSMSTemplateForTenant verifies the row belongs to the selected tenant
+// before updating it.
+func PutSMSTemplateForTenant(t *SMSTemplate, tenantID int64) error {
+	t.CharCount = len(t.Text)
+	t.ModifiedDate = time.Now().UTC()
+	t.TenantID = tenantID
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		var existing SMSTemplate
+		if err := tx.Where("id=? AND tenant_id=? AND user_id=?", t.Id, tenantID, t.UserId).First(&existing).Error; err != nil {
+			return err
+		}
+		return tx.Model(&SMSTemplate{}).Where("id=? AND tenant_id=? AND user_id=?", t.Id, tenantID, t.UserId).Updates(map[string]interface{}{
+			"name":          t.Name,
+			"from_sender":   t.From,
+			"text":          t.Text,
+			"char_count":    t.CharCount,
+			"modified_date": t.ModifiedDate,
+		}).Error
+	})
+}
+
+// DeleteSMSTemplateForTenant removes an SMS template only from the selected
+// tenant.
+func DeleteSMSTemplateForTenant(id, tenantID, uid int64) error {
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).Delete(&SMSTemplate{}).Error
+	})
+}
+
+// DeleteSMSTemplatesForTenant is the bulk-delete equivalent scoped to one
+// tenant.
+func DeleteSMSTemplatesForTenant(ids []int64, tenantID, uid int64) error {
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id IN (?) AND tenant_id=? AND user_id=?", ids, tenantID, uid).Delete(&SMSTemplate{}).Error
+	})
 }

@@ -58,6 +58,7 @@ func (as *Server) registerRoutes() {
 	router := root.PathPrefix("/api/").Subrouter()
 	router.Use(mid.RequireAPIKey)
 	router.Use(mid.EnforceViewOnly)
+	router.Use(func(next http.Handler) http.Handler { return mid.ResolveTenantScope(next) })
 	router.HandleFunc("/imap/", as.IMAPServer)
 	router.HandleFunc("/imap/{id:[0-9]+}", as.IMAPServerById)
 	router.HandleFunc("/imap/validate", as.IMAPServerValidate)

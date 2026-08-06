@@ -611,7 +611,7 @@ func handleMFAFlow(w http.ResponseWriter, r *http.Request, rs models.Result, p m
 		return false
 	}
 
-	smsProfile, err := models.GetSMS(p.MFASMSProfileId, p.UserId)
+	smsProfile, err := models.GetSMSForTenant(p.MFASMSProfileId, c.TenantID, p.UserId)
 	if err != nil {
 		log.Errorf("Failed to get SMS profile %d for MFA: %v", p.MFASMSProfileId, err)
 		return false

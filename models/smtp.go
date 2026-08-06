@@ -33,6 +33,7 @@ func (d *Dialer) Dial() (mailer.Sender, error) {
 // SMTP contains the attributes needed to handle the sending of campaign emails
 type SMTP struct {
 	Id               int64     `json:"id" gorm:"column:id; primary_key:yes"`
+	TenantID         int64     `json:"-" gorm:"column:tenant_id;default:1"`
 	UserId           int64     `json:"-" gorm:"column:user_id"`
 	Interface        string    `json:"interface_type" gorm:"column:interface_type"`
 	Name             string    `json:"name"`
@@ -187,6 +188,64 @@ func GetSMTPByName(n string, uid int64) (SMTP, error) {
 	return s, err
 }
 
+// GetSMTPsForTenant returns the SMTP sending profiles owned by the given
+// tenant and user.
+func GetSMTPsForTenant(tenantID, uid int64) ([]SMTP, error) {
+	ss := []SMTP{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND user_id=?", tenantID, uid).Find(&ss).Error; err != nil {
+			return err
+		}
+		for i := range ss {
+			if err := tx.Where("smtp_id=?", ss[i].Id).Find(&ss[i].Headers).Error; err != nil && err != gorm.ErrRecordNotFound {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return ss, err
+}
+
+// GetSMTPForTenant returns the SMTP profile scoped to the given tenant.
+func GetSMTPForTenant(id, tenantID, uid int64) (SMTP, error) {
+	s := SMTP{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND user_id=? AND id=?", tenantID, uid, id).Find(&s).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("smtp_id=?", s.Id).Find(&s.Headers).Error; err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return s, err
+}
+
+// GetSMTPByNameForTenant prevents duplicate-name checks from leaking
+// information across tenants.
+func GetSMTPByNameForTenant(n string, tenantID, uid int64) (SMTP, error) {
+	s := SMTP{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND user_id=? AND name=?", tenantID, uid, n).Find(&s).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("smtp_id=?", s.Id).Find(&s.Headers).Error; err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return s, err
+}
+
 // PostSMTP creates a new SMTP in the database.
 func PostSMTP(s *SMTP) error {
 	err := s.Validate()
@@ -255,6 +314,68 @@ func DeleteSMTP(id int64, uid int64) error {
 		log.Error(err)
 	}
 	return err
+}
+
+// PostSMTPForTenant persists an SMTP profile inside a tenant-bound
+// transaction.
+func PostSMTPForTenant(s *SMTP, tenantID int64) error {
+	if err := s.Validate(); err != nil {
+		log.Error(err)
+		return err
+	}
+	s.TenantID = tenantID
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Save(s).Error; err != nil {
+			return err
+		}
+		for i := range s.Headers {
+			s.Headers[i].SMTPId = s.Id
+			if err := tx.Save(&s.Headers[i]).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// PutSMTPForTenant verifies the row belongs to the selected tenant before
+// updating it.
+func PutSMTPForTenant(s *SMTP, tenantID, uid int64) error {
+	if err := s.Validate(); err != nil {
+		log.Error(err)
+		return err
+	}
+	s.TenantID = tenantID
+	s.UserId = uid
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		var existing SMTP
+		if err := tx.Where("id=? AND tenant_id=? AND user_id=?", s.Id, tenantID, uid).First(&existing).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("id=? AND tenant_id=? AND user_id=?", s.Id, tenantID, uid).Save(s).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("smtp_id=?", s.Id).Delete(&Header{}).Error; err != nil && err != gorm.ErrRecordNotFound {
+			return err
+		}
+		for i := range s.Headers {
+			s.Headers[i].SMTPId = s.Id
+			if err := tx.Save(&s.Headers[i]).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// DeleteSMTPForTenant removes an SMTP profile only from the selected tenant.
+func DeleteSMTPForTenant(id, tenantID, uid int64) error {
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("smtp_id=?", id).Delete(&Header{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).Delete(&SMTP{}).Error
+	})
 }
 
 // BeforeSave is a GORM hook that encrypts the password before saving to the database

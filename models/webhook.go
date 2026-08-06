@@ -4,11 +4,13 @@ import (
 	"errors"
 
 	log "github.com/gophish/gophish/logger"
+	"github.com/jinzhu/gorm"
 )
 
 // Webhook represents the webhook model
 type Webhook struct {
 	Id       int64  `json:"id" gorm:"column:id; primary_key:yes"`
+	TenantID int64  `json:"-" gorm:"column:tenant_id;default:1"`
 	Name     string `json:"name"`
 	URL      string `json:"url"`
 	Secret   string `json:"secret"`
@@ -83,4 +85,71 @@ func (wh *Webhook) Validate() error {
 		return ErrNameNotSpecified
 	}
 	return nil
+}
+
+// GetWebhooksForTenant returns the webhooks owned by the given tenant.
+func GetWebhooksForTenant(tenantID int64) ([]Webhook, error) {
+	whs := []Webhook{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=?", tenantID).Find(&whs).Error
+	})
+	return whs, err
+}
+
+// GetActiveWebhooksForTenant returns the active webhooks owned by the given
+// tenant. Campaign event delivery must use this instead of the legacy
+// global lookup, so an event from one tenant's campaign is never sent to
+// another tenant's endpoint.
+func GetActiveWebhooksForTenant(tenantID int64) ([]Webhook, error) {
+	whs := []Webhook{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND is_active=?", tenantID, true).Find(&whs).Error
+	})
+	return whs, err
+}
+
+// GetWebhookForTenant returns the webhook scoped to the given tenant.
+func GetWebhookForTenant(id, tenantID int64) (Webhook, error) {
+	wh := Webhook{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id=? AND tenant_id=?", id, tenantID).First(&wh).Error
+	})
+	return wh, err
+}
+
+// PostWebhookForTenant creates a new webhook inside a tenant-bound
+// transaction.
+func PostWebhookForTenant(wh *Webhook, tenantID int64) error {
+	if err := wh.Validate(); err != nil {
+		log.Error(err)
+		return err
+	}
+	wh.TenantID = tenantID
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Save(wh).Error
+	})
+}
+
+// PutWebhookForTenant verifies the row belongs to the selected tenant before
+// updating it.
+func PutWebhookForTenant(wh *Webhook, tenantID int64) error {
+	if err := wh.Validate(); err != nil {
+		log.Error(err)
+		return err
+	}
+	wh.TenantID = tenantID
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		var existing Webhook
+		if err := tx.Where("id=? AND tenant_id=?", wh.Id, tenantID).First(&existing).Error; err != nil {
+			return err
+		}
+		return tx.Where("id=? AND tenant_id=?", wh.Id, tenantID).Save(wh).Error
+	})
+}
+
+// DeleteWebhookForTenant removes a webhook only from the selected tenant.
+func DeleteWebhookForTenant(id, tenantID int64) error {
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id=? AND tenant_id=?", id, tenantID).Delete(&Webhook{}).Error
+	})
 }

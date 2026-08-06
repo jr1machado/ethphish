@@ -19,6 +19,24 @@ services:
       - CHOWN
       - FOWNER
 
+  db-migrate:
+    image: ethphish-dev-server
+    build:
+      context: .
+    entrypoint: ["/opt/ethphish/postgres-schema-prepare"]
+    command:
+      - "--postgres-dsn"
+      - "host=postgres port=5432 user=ethphish password=development-only-change-me dbname=ethphish sslmode=disable"
+    networks:
+      - data_internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   server:
     build:
       context: .
@@ -33,11 +51,16 @@ services:
       ETHPHISH_PHISH_CERT_PATH: /var/lib/ethphish/tls/web.crt
       ETHPHISH_PHISH_KEY_PATH: /var/lib/ethphish/tls/web.key
       ETHPHISH_DB_DRIVER: postgres
-      ETHPHISH_DB_DSN: host=postgres port=5432 user=ethphish password=development-only-change-me dbname=ethphish sslmode=disable
+      # A non-superuser role without BYPASSRLS is required so the RLS
+      # tenant_isolation policies (migration 20260806000004) are actually
+      # enforced; the privileged "ethphish" role always bypasses RLS and is
+      # reserved for the db-migrate step.
+      ETHPHISH_DB_DSN: host=postgres port=5432 user=ethphish_app password=development-only-change-me-app dbname=ethphish sslmode=disable
       ETHPHISH_DB_MAX_OPEN_CONNECTIONS: "10"
       ETHPHISH_DB_MAX_IDLE_CONNECTIONS: "5"
       ETHPHISH_DB_CONNECTION_MAX_LIFETIME: 30m
       ETHPHISH_REPORTS_STORAGE_PATH: /var/lib/ethphish/reports
+      ETHPHISH_RABBITMQ_URL: amqp://ethphish:development-only-change-me@rabbitmq:5672/
     expose:
       - "3333"
       - "8080"
@@ -57,6 +80,8 @@ services:
     depends_on:
       tls-init:
         condition: service_completed_successfully
+      db-migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       rabbitmq:
@@ -66,6 +91,7 @@ services:
     image: caddy:2.10.0-alpine
     ports:
       - "9443:9443"
+      - "9444:9444"
     volumes:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
     read_only: true
@@ -73,6 +99,7 @@ services:
       - /config
       - /data
     networks:
+      - admin_internal
       - application_internal
 
   postgres:
@@ -93,6 +120,12 @@ services:
 
   rabbitmq:
     image: rabbitmq:4.1.2-alpine
+    environment:
+      # The default "guest" user only accepts connections from localhost
+      # inside the container, which the server can't use over the compose
+      # network. Dev-only credential, matching the postgres services above.
+      RABBITMQ_DEFAULT_USER: ethphish
+      RABBITMQ_DEFAULT_PASS: development-only-change-me
     networks:
       - data_internal
     healthcheck:

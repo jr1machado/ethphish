@@ -64,6 +64,7 @@ type Config struct {
 	Logging        *log.Config   `json:"logging"`
 	ReportsConf    Reports       `json:"reports"`
 	OIDC           OIDC          `json:"oidc"`
+	RabbitMQURL    string        `json:"rabbitmq_url"`
 }
 
 // Version contains the current gophish version
@@ -97,7 +98,7 @@ func LoadConfig(filepath string) (*Config, error) {
 		return nil, fmt.Errorf("only PostgreSQL is supported by the server runtime; configure ETHPHISH_DB_DRIVER=postgres")
 	}
 	// Choosing the migrations directory based on the database used.
-	config.MigrationsPath = config.MigrationsPath + config.DBName
+	config.MigrationsPath = config.MigrationsPath + config.DBName + "/migrations"
 	// Explicitly set the TestFlag to false to prevent config.json overrides
 	config.TestFlag = false
 	return config, nil
@@ -161,6 +162,7 @@ func applyEnvironment(config *Config) error {
 	setString("ETHPHISH_DB_SSL_CA_PATH", &config.DBSSLCaPath)
 	setString("ETHPHISH_CONTACT_ADDRESS", &config.ContactAddress)
 	setString("ETHPHISH_REPORTS_STORAGE_PATH", &config.ReportsConf.StoragePath)
+	setString("ETHPHISH_RABBITMQ_URL", &config.RabbitMQURL)
 	setString("ETHPHISH_OIDC_ISSUER", &config.OIDC.Issuer)
 	setString("ETHPHISH_OIDC_CLIENT_ID", &config.OIDC.ClientID)
 	setString("ETHPHISH_OIDC_REDIRECT_URL", &config.OIDC.RedirectURL)

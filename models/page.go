@@ -7,11 +7,13 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	log "github.com/gophish/gophish/logger"
+	"github.com/jinzhu/gorm"
 )
 
 // Page contains the fields used for a Page model
 type Page struct {
 	Id                 int64     `json:"id" gorm:"column:id; primary_key:yes"`
+	TenantID           int64     `json:"-" gorm:"column:tenant_id;default:1"`
 	UserId             int64     `json:"-" gorm:"column:user_id"`
 	Name               string    `json:"name"`
 	HTML               string    `json:"html" gorm:"column:html"`
@@ -114,6 +116,17 @@ func GetPages(uid int64) ([]Page, error) {
 	return ps, err
 }
 
+func GetPagesForTenant(tenantID, uid int64) ([]Page, error) {
+	ps := []Page{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND user_id=?", tenantID, uid).Find(&ps).Error
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return ps, err
+}
+
 // GetPage returns the page, if it exists, specified by the given id and user_id.
 func GetPage(id int64, uid int64) (Page, error) {
 	p := Page{}
@@ -124,10 +137,32 @@ func GetPage(id int64, uid int64) (Page, error) {
 	return p, err
 }
 
+func GetPageForTenant(id, tenantID, uid int64) (Page, error) {
+	p := Page{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND user_id=? AND id=?", tenantID, uid, id).First(&p).Error
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return p, err
+}
+
 // GetPageByName returns the page, if it exists, specified by the given name and user_id.
 func GetPageByName(n string, uid int64) (Page, error) {
 	p := Page{}
 	err := db.Where("user_id=? and name=?", uid, n).Find(&p).Error
+	if err != nil {
+		log.Error(err)
+	}
+	return p, err
+}
+
+func GetPageByNameForTenant(n string, tenantID, uid int64) (Page, error) {
+	p := Page{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id=? AND user_id=? AND name=?", tenantID, uid, n).First(&p).Error
+	})
 	if err != nil {
 		log.Error(err)
 	}
@@ -149,6 +184,16 @@ func PostPage(p *Page) error {
 	return err
 }
 
+func PostPageForTenant(p *Page, tenantID int64) error {
+	if err := p.Validate(); err != nil {
+		return err
+	}
+	p.TenantID = tenantID
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Save(p).Error
+	})
+}
+
 // PutPage edits an existing Page in the database.
 // Per the PUT Method RFC, it presumes all data for a page is provided.
 func PutPage(p *Page) error {
@@ -163,6 +208,17 @@ func PutPage(p *Page) error {
 	return err
 }
 
+func PutPageForTenant(p *Page, tenantID, uid int64) error {
+	if err := p.Validate(); err != nil {
+		return err
+	}
+	p.TenantID = tenantID
+	p.UserId = uid
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", p.Id, tenantID, uid).Save(p).Error
+	})
+}
+
 // DeletePage deletes an existing page in the database.
 // An error is returned if a page with the given user id and page id is not found.
 func DeletePage(id int64, uid int64) error {
@@ -171,6 +227,12 @@ func DeletePage(id int64, uid int64) error {
 		log.Error(err)
 	}
 	return err
+}
+
+func DeletePageForTenant(id, tenantID, uid int64) error {
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).Delete(&Page{}).Error
+	})
 }
 
 // DeletePages deletes multiple pages in the database.
@@ -202,4 +264,15 @@ func DeletePages(ids []int64, uid int64) error {
 	}
 
 	return tx.Commit().Error
+}
+
+func DeletePagesForTenant(ids []int64, tenantID, uid int64) error {
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		for _, id := range ids {
+			if err := tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).Delete(&Page{}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

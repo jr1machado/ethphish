@@ -23,9 +23,10 @@ type SMSTemplateTestSuite struct {
 	admin     models.User
 }
 
-// setupRequestContext adds the user_id to the request context
+// setupRequestContext adds the user_id and tenant scope to the request context
 func (s *SMSTemplateTestSuite) setupRequestContext(req *http.Request) *http.Request {
-	return ctx.Set(req, "user_id", s.admin.Id)
+	req = ctx.Set(req, "user_id", s.admin.Id)
+	return ctx.WithTenantScope(req, ctx.TenantScope{TenantID: 1, UserID: s.admin.Id})
 }
 
 func (s *SMSTemplateTestSuite) SetupSuite() {
@@ -102,7 +103,7 @@ func (s *SMSTemplateTestSuite) TestSMSTemplate() {
 		Text:   "This is a test SMS template with {{.FirstName}} and {{.URL}}",
 		UserId: 1,
 	}
-	err := models.PostSMSTemplate(&template)
+	err := models.PostSMSTemplateForTenant(&template, 1)
 	s.Nil(err)
 
 	// Test GET request

@@ -83,9 +83,14 @@ func StopReportServices() {
 func (as *Server) QueueReport(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
+		scope, err := ctx.RequireTenantScope(r)
+		if err != nil {
+			JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+			return
+		}
 		// Parse the request
 		var req reports.AsyncReportRequest
-		err := json.NewDecoder(r.Body).Decode(&req)
+		err = json.NewDecoder(r.Body).Decode(&req)
 		if err != nil {
 			log.Errorf("Error parsing report request: %v", err)
 			JSONResponse(w, models.Response{Success: false, Message: "Invalid request format: " + err.Error()}, http.StatusBadRequest)
@@ -174,7 +179,7 @@ func (as *Server) QueueReport(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Queue the report
-		jobID, err := jobService.QueueReport(uid, validCampaignIDs, req.Format, req.Options)
+		jobID, err := jobService.QueueReport(scope.TenantID, uid, validCampaignIDs, req.Format, req.Options)
 		if err != nil {
 			log.Errorf("Error queueing report: %v", err)
 			JSONResponse(w, models.Response{Success: false, Message: "Failed to queue report: " + err.Error()}, http.StatusInternalServerError)
@@ -346,6 +351,11 @@ func (as *Server) ListReports(w http.ResponseWriter, r *http.Request) {
 		as.GenerateReportLegacy(w, r)
 		return
 	case "GET":
+		scope, err := ctx.RequireTenantScope(r)
+		if err != nil {
+			JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+			return
+		}
 		// Get the current user from the request context
 		user, ok := ctx.Get(r, "user").(models.User)
 		if !ok {
@@ -356,7 +366,7 @@ func (as *Server) ListReports(w http.ResponseWriter, r *http.Request) {
 		uid := user.Id
 
 		// Get reports
-		reports, err := models.GetReports(uid)
+		reports, err := models.GetReportsForTenant(scope.TenantID, uid)
 		if err != nil {
 			log.Errorf("Error getting reports for user %d: %v", uid, err)
 			JSONResponse(w, models.Response{Success: false, Message: "Error retrieving reports"}, http.StatusInternalServerError)
@@ -364,7 +374,7 @@ func (as *Server) ListReports(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Get stats
-		statsMap, err := models.GetReportStats(uid)
+		statsMap, err := models.GetReportStatsForTenant(scope.TenantID, uid)
 		if err != nil {
 			log.Errorf("Error getting report stats for user %d: %v", uid, err)
 			statsMap = map[string]int{"total": 0, "queued": 0, "processing": 0, "completed": 0, "failed": 0}
@@ -435,6 +445,11 @@ func (as *Server) ListReports(w http.ResponseWriter, r *http.Request) {
 func (as *Server) GetReportStatus(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
+		scope, err := ctx.RequireTenantScope(r)
+		if err != nil {
+			JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+			return
+		}
 		// Get the current user from the request context
 		user, ok := ctx.Get(r, "user").(models.User)
 		if !ok {
@@ -454,7 +469,7 @@ func (as *Server) GetReportStatus(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Get job status
-		status, err := jobService.GetJobStatus(reportId, uid)
+		status, err := jobService.GetJobStatus(reportId, scope.TenantID, uid)
 		if err != nil {
 			log.Errorf("Error getting job status for report %d: %v", reportId, err)
 			JSONResponse(w, models.Response{Success: false, Message: "Report not found"}, http.StatusNotFound)
@@ -472,6 +487,11 @@ func (as *Server) GetReportStatus(w http.ResponseWriter, r *http.Request) {
 func (as *Server) DownloadReport(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
+		scope, err := ctx.RequireTenantScope(r)
+		if err != nil {
+			JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+			return
+		}
 		// Get the current user from the request context
 		user, ok := ctx.Get(r, "user").(models.User)
 		if !ok {
@@ -491,7 +511,7 @@ func (as *Server) DownloadReport(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Get the report
-		report, err := models.GetReport(reportId, uid)
+		report, err := models.GetReportForTenant(reportId, scope.TenantID, uid)
 		if err != nil {
 			log.Errorf("Error getting report %d: %v", reportId, err)
 			JSONResponse(w, models.Response{Success: false, Message: "Report not found"}, http.StatusNotFound)
@@ -564,6 +584,11 @@ func (as *Server) DownloadReport(w http.ResponseWriter, r *http.Request) {
 func (as *Server) DeleteReport(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "DELETE":
+		scope, err := ctx.RequireTenantScope(r)
+		if err != nil {
+			JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+			return
+		}
 		// Get the current user from the request context
 		user, ok := ctx.Get(r, "user").(models.User)
 		if !ok {
@@ -583,7 +608,7 @@ func (as *Server) DeleteReport(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Get the report to check file path
-		report, err := models.GetReport(reportId, uid)
+		report, err := models.GetReportForTenant(reportId, scope.TenantID, uid)
 		if err != nil {
 			log.Errorf("Error getting report %d: %v", reportId, err)
 			JSONResponse(w, models.Response{Success: false, Message: "Report not found"}, http.StatusNotFound)
@@ -600,7 +625,7 @@ func (as *Server) DeleteReport(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Delete the database record
-		err = models.DeleteReport(reportId, uid)
+		err = models.DeleteReportForTenant(reportId, scope.TenantID, uid)
 		if err != nil {
 			log.Errorf("Error deleting report %d: %v", reportId, err)
 			JSONResponse(w, models.Response{Success: false, Message: "Error deleting report"}, http.StatusInternalServerError)

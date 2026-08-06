@@ -3,21 +3,40 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gophish/gophish/config"
+	tenantctx "github.com/gophish/gophish/context"
 	appcrypto "github.com/gophish/gophish/crypto"
+	mid "github.com/gophish/gophish/middleware"
 	"github.com/gophish/gophish/migration"
 	"github.com/gophish/gophish/models"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 const postgresDSNEnv = "ETHPHISH_TEST_POSTGRES_DSN"
+const postgresMigrationsPathEnv = "ETHPHISH_TEST_MIGRATIONS_PATH"
+
+func postgresMigrationsPath(t *testing.T) string {
+	t.Helper()
+	if path := os.Getenv(postgresMigrationsPathEnv); path != "" {
+		return path
+	}
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locating integration test source")
+	}
+	return filepath.Join(filepath.Dir(sourceFile), "..", "..", "db", "db_postgres", "migrations")
+}
 
 // setupPostgres verifies the deployment path used in development and CI: a
 // fresh PostgreSQL database accepts every migration and is available through
@@ -30,11 +49,7 @@ func setupPostgres(t *testing.T) {
 		t.Skipf("set %s to run PostgreSQL integration tests", postgresDSNEnv)
 	}
 
-	_, sourceFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("locating integration test source")
-	}
-	migrationsPath := filepath.Join(filepath.Dir(sourceFile), "..", "..", "db", "db_postgres", "migrations")
+	migrationsPath := postgresMigrationsPath(t)
 
 	t.Setenv(models.InitialAdminPassword, "integration-test-password")
 	t.Setenv(models.InitialAdminApiToken, "integration-test-api-token")
@@ -58,6 +73,238 @@ func TestPostgresMigrationsAndReadiness(t *testing.T) {
 	setupPostgres(t)
 	if _, err := models.GetUserByUsername(models.DefaultAdminUsername); err != nil {
 		t.Fatalf("checking migrated administrative user: %v", err)
+	}
+}
+
+// TestPostgresTenantFoundation verifies that the Sprint 04 tenant, company,
+// and user-grant relations are persisted by PostgreSQL with their intended
+// boundaries. It does not send messages or contact any external service.
+func TestPostgresTenantFoundation(t *testing.T) {
+	setupPostgres(t)
+
+	suffix := time.Now().UTC().Format("20060102150405.000000000")
+	tenant := models.Tenant{Slug: "integration-tenant-" + suffix, Name: "Integration tenant " + suffix, Active: true}
+	if err := models.PostTenant(&tenant); err != nil {
+		t.Fatalf("creating tenant: %v", err)
+	}
+	company := models.Company{TenantID: tenant.ID, Name: "Integration company " + suffix}
+	if err := models.PostCompany(&company); err != nil {
+		t.Fatalf("creating company: %v", err)
+	}
+	grant := models.TenantUser{
+		TenantID:  tenant.ID,
+		UserID:    1,
+		CompanyID: &company.ID,
+		Role:      "tenant_admin",
+	}
+	if err := models.GrantTenantUser(&grant); err != nil {
+		t.Fatalf("granting tenant access: %v", err)
+	}
+
+	storedTenant, err := models.GetTenantBySlug(strings.ToUpper(tenant.Slug))
+	if err != nil || storedTenant.ID != tenant.ID || !storedTenant.Active {
+		t.Fatalf("stored tenant = %#v, err = %v", storedTenant, err)
+	}
+	storedGrant, err := models.GetTenantUser(tenant.ID, 1)
+	if err != nil || storedGrant.CompanyID == nil || *storedGrant.CompanyID != company.ID || storedGrant.Role != "tenant_admin" {
+		t.Fatalf("stored tenant grant = %#v, err = %v", storedGrant, err)
+	}
+	grants, err := models.GetTenantUsers(1)
+	if err != nil || len(grants) == 0 {
+		t.Fatalf("user tenant grants = %#v, err = %v", grants, err)
+	}
+	template := models.Template{
+		TenantID: tenant.ID,
+		UserId:   1,
+		Name:     "Tenant-scoped template " + suffix,
+		Subject:  "Authorized simulation",
+		Text:     "Training message",
+	}
+	if err := models.PostTemplate(&template); err != nil {
+		t.Fatalf("creating tenant-scoped template: %v", err)
+	}
+	storedTemplate, err := models.GetTemplate(template.Id, 1)
+	if err != nil || storedTemplate.TenantID != tenant.ID {
+		t.Fatalf("stored tenant-scoped template = %#v, err = %v", storedTemplate, err)
+	}
+	otherTenant := models.Tenant{Slug: "integration-other-tenant-" + suffix, Name: "Integration other tenant " + suffix, Active: true}
+	if err := models.PostTenant(&otherTenant); err != nil {
+		t.Fatalf("creating second tenant: %v", err)
+	}
+	if err := models.GrantTenantUser(&models.TenantUser{TenantID: otherTenant.ID, UserID: 1, Role: "tenant_admin"}); err != nil {
+		t.Fatalf("granting second tenant access: %v", err)
+	}
+	otherTemplate := models.Template{
+		TenantID: otherTenant.ID,
+		UserId:   1,
+		Name:     "Other tenant template " + suffix,
+		Subject:  "Authorized simulation",
+		Text:     "Training message",
+	}
+	if err := models.PostTemplate(&otherTemplate); err != nil {
+		t.Fatalf("creating second tenant template: %v", err)
+	}
+	if _, err := models.GetTemplateForTenant(otherTemplate.Id, tenant.ID, 1); err == nil {
+		t.Fatal("tenant-scoped lookup returned another tenant's template")
+	}
+	group := models.Group{
+		TenantID: tenant.ID,
+		UserId:   1,
+		Name:     "Tenant group " + suffix,
+		Targets:  []models.Target{{BaseRecipient: models.BaseRecipient{Email: "tenant-" + suffix + "@example.test"}}},
+	}
+	if err := models.PostGroupForTenant(&group, tenant.ID); err != nil {
+		t.Fatalf("creating tenant-scoped group: %v", err)
+	}
+	groups, err := models.GetGroupsForTenant(otherTenant.ID, 1)
+	if err != nil {
+		t.Fatalf("listing groups for second tenant: %v", err)
+	}
+	for _, storedGroup := range groups {
+		if storedGroup.Id == group.Id {
+			t.Fatal("tenant-scoped group list returned another tenant's group")
+		}
+	}
+	if _, err := models.GetGroupForTenant(group.Id, otherTenant.ID, 1); err == nil {
+		t.Fatal("tenant-scoped group lookup returned another tenant's group")
+	}
+	if _, err := models.ToggleGroupLockForTenant(group.Id, otherTenant.ID, 1); err == nil {
+		t.Fatal("tenant-scoped group lock changed another tenant's group")
+	}
+	page := models.Page{TenantID: tenant.ID, UserId: 1, Name: "Tenant page " + suffix, HTML: "<p>Training</p>"}
+	if err := models.PostPageForTenant(&page, tenant.ID); err != nil {
+		t.Fatalf("creating tenant-scoped page: %v", err)
+	}
+	if _, err := models.GetPageForTenant(page.Id, otherTenant.ID, 1); err == nil {
+		t.Fatal("tenant-scoped lookup returned another tenant's page")
+	}
+	campaign := models.Campaign{
+		TenantID: tenant.ID,
+		UserId:   1,
+		Name:     "Tenant generic campaign " + suffix,
+		Type:     "generic",
+		Page:     page,
+		URL:      "https://training.example.test",
+	}
+	if err := models.PostCampaign(&campaign, 1); err != nil {
+		t.Fatalf("creating tenant-scoped generic campaign: %v", err)
+	}
+	if _, err := models.GetCampaignForTenant(campaign.Id, otherTenant.ID, 1); err == nil {
+		t.Fatal("tenant-scoped lookup returned another tenant's campaign")
+	}
+
+	protected := mid.ResolveTenantScope(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		scope, err := tenantctx.RequireTenantScope(r)
+		if err != nil || scope.TenantID != tenant.ID || scope.UserID != 1 {
+			http.Error(w, "unexpected tenant scope", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(mid.TenantIDHeader, fmt.Sprintf("%d", tenant.ID))
+	req = tenantctx.Set(req, "user", models.User{Id: 1})
+	response := httptest.NewRecorder()
+	protected.ServeHTTP(response, req)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("authorized tenant scope returned %d: %s", response.Code, response.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(mid.TenantIDHeader, fmt.Sprintf("%d", tenant.ID+999))
+	req = tenantctx.Set(req, "user", models.User{Id: 1})
+	response = httptest.NewRecorder()
+	protected.ServeHTTP(response, req)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("cross-tenant request returned %d, want %d", response.Code, http.StatusForbidden)
+	}
+}
+
+var dsnCredentialPattern = regexp.MustCompile(`\b(user|password)=\S+`)
+
+// restrictedAppDSN swaps the privileged migration credentials in dsn for the
+// non-superuser "ethphish_app" role created by migration
+// 20260806000005_create_restricted_app_role.sql. Only that role is subject
+// to the tenant_isolation RLS policies: the privileged role used to run
+// migrations is a PostgreSQL superuser and always bypasses RLS.
+func restrictedAppDSN(dsn string) string {
+	replaced := dsnCredentialPattern.ReplaceAllStringFunc(dsn, func(kv string) string {
+		if strings.HasPrefix(kv, "user=") {
+			return "user=ethphish_app"
+		}
+		return "password=development-only-change-me-app"
+	})
+	return replaced
+}
+
+// TestPostgresRLSEnforcesTenantIsolation verifies that the tenant_isolation
+// RLS policies actually restrict the restricted "ethphish_app" role that the
+// server connects as in production (see compose.yaml), as opposed to just
+// existing on paper. It seeds two tenants' webhooks through the privileged
+// connection (which bypasses RLS as any superuser does) and then reads/writes
+// through a second connection opened with the restricted role to prove:
+//  1. a session that sets ethphish.tenant_id only sees that tenant's rows;
+//  2. that session cannot insert a row claiming a different tenant;
+//  3. a session that never sets ethphish.tenant_id (a background worker)
+//     keeps the cross-tenant visibility it already relies on.
+func TestPostgresRLSEnforcesTenantIsolation(t *testing.T) {
+	setupPostgres(t)
+
+	suffix := time.Now().UTC().Format("20060102150405.000000000")
+	tenantA := models.Tenant{Slug: "rls-a-" + suffix, Name: "RLS tenant A " + suffix, Active: true}
+	if err := models.PostTenant(&tenantA); err != nil {
+		t.Fatalf("creating tenant A: %v", err)
+	}
+	tenantB := models.Tenant{Slug: "rls-b-" + suffix, Name: "RLS tenant B " + suffix, Active: true}
+	if err := models.PostTenant(&tenantB); err != nil {
+		t.Fatalf("creating tenant B: %v", err)
+	}
+	if err := models.PostWebhookForTenant(&models.Webhook{Name: "rls-wh-a-" + suffix, URL: "https://example.test/a", IsActive: true}, tenantA.ID); err != nil {
+		t.Fatalf("creating tenant A webhook: %v", err)
+	}
+	if err := models.PostWebhookForTenant(&models.Webhook{Name: "rls-wh-b-" + suffix, URL: "https://example.test/b", IsActive: true}, tenantB.ID); err != nil {
+		t.Fatalf("creating tenant B webhook: %v", err)
+	}
+
+	appDB, err := sql.Open("postgres", restrictedAppDSN(os.Getenv(postgresDSNEnv)))
+	if err != nil {
+		t.Fatalf("opening restricted-role connection: %v", err)
+	}
+	defer appDB.Close()
+
+	// No session variable set: a background worker's connection must keep
+	// seeing every tenant's rows for these two, plus whatever earlier tests
+	// left behind.
+	var crossTenantCount int
+	if err := appDB.QueryRow("SELECT count(*) FROM webhooks WHERE name IN ($1, $2)", "rls-wh-a-"+suffix, "rls-wh-b-"+suffix).Scan(&crossTenantCount); err != nil {
+		t.Fatalf("querying webhooks without a tenant scope: %v", err)
+	}
+	if crossTenantCount != 2 {
+		t.Fatalf("background-worker visibility = %d, want 2", crossTenantCount)
+	}
+
+	tx, err := appDB.Begin()
+	if err != nil {
+		t.Fatalf("beginning restricted-role transaction: %v", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("SELECT set_config('ethphish.tenant_id', $1, true)", fmt.Sprintf("%d", tenantA.ID)); err != nil {
+		t.Fatalf("setting tenant scope: %v", err)
+	}
+
+	var scopedCount int
+	if err := tx.QueryRow("SELECT count(*) FROM webhooks WHERE name IN ($1, $2)", "rls-wh-a-"+suffix, "rls-wh-b-"+suffix).Scan(&scopedCount); err != nil {
+		t.Fatalf("querying webhooks scoped to tenant A: %v", err)
+	}
+	if scopedCount != 1 {
+		t.Fatalf("tenant-scoped visibility = %d, want 1 (only tenant A's row)", scopedCount)
+	}
+
+	if _, err := tx.Exec(
+		"INSERT INTO webhooks (tenant_id, name, url, is_active) VALUES ($1, $2, $3, true)",
+		tenantB.ID, "rls-cross-attempt-"+suffix, "https://example.test/blocked",
+	); err == nil {
+		t.Fatal("restricted role inserted a row for a tenant outside its session scope")
 	}
 }
 
@@ -209,8 +456,7 @@ func TestPostgresSQLiteImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer target.Close()
-	_, sourceFile, _, _ := runtime.Caller(0)
-	migrationsPath := filepath.Join(filepath.Dir(sourceFile), "..", "..", "db", "db_postgres", "migrations")
+	migrationsPath := postgresMigrationsPath(t)
 	latest, err := migration.Latest(migrationsPath)
 	if err != nil {
 		t.Fatal(err)

@@ -75,7 +75,11 @@ func WithWorker(w worker.Worker) AdminServerOption {
 // NewAdminServer returns a new instance of the AdminServer with the
 // provided config and options applied.
 func NewAdminServer(adminConfig config.AdminServer, fullConfig *config.Config, options ...AdminServerOption) *AdminServer {
-	defaultWorker, _ := worker.New()
+	defaultWorker, err := worker.New(worker.WithRabbitMQURL(fullConfig.RabbitMQURL))
+	if err != nil {
+		log.Error("connecting to RabbitMQ, campaign email will use the direct in-process path: ", err)
+		defaultWorker, _ = worker.New()
+	}
 	defaultServer := &http.Server{
 		ReadTimeout: 10 * time.Second,
 		Addr:        adminConfig.ListenURL,

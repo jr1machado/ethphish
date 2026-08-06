@@ -16,9 +16,15 @@ import (
 
 // SMSProfiles handles requests for the /api/sms/ endpoint
 func (as *Server) SMSProfiles(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
+	userID := ctx.Get(r, "user_id").(int64)
 	switch {
 	case r.Method == "GET":
-		ss, err := models.GetSMSs(ctx.Get(r, "user_id").(int64))
+		ss, err := models.GetSMSsForTenant(scope.TenantID, userID)
 		if err != nil {
 			log.Error(err)
 		}
@@ -33,7 +39,7 @@ func (as *Server) SMSProfiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Check to make sure the name is unique
-		existingProfile, err := models.GetSMSByName(s.Name, ctx.Get(r, "user_id").(int64))
+		existingProfile, err := models.GetSMSByNameForTenant(s.Name, scope.TenantID, userID)
 		if err != nil && err != gorm.ErrRecordNotFound {
 			// This is an unexpected error
 			log.Error(err)
@@ -47,8 +53,9 @@ func (as *Server) SMSProfiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.ModifiedDate = time.Now().UTC()
-		s.UserId = ctx.Get(r, "user_id").(int64)
-		err = models.PostSMS(&s)
+		s.UserId = userID
+		s.TenantID = scope.TenantID
+		err = models.PostSMSForTenant(&s, scope.TenantID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: err.Error()}, http.StatusInternalServerError)
 			return
@@ -60,9 +67,15 @@ func (as *Server) SMSProfiles(w http.ResponseWriter, r *http.Request) {
 // SMSProfile contains functions to handle the GET'ing, DELETE'ing, and PUT'ing
 // of a SMS profile object
 func (as *Server) SMSProfile(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
+	userID := ctx.Get(r, "user_id").(int64)
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
-	s, err := models.GetSMS(id, ctx.Get(r, "user_id").(int64))
+	s, err := models.GetSMSForTenant(id, scope.TenantID, userID)
 	if err != nil {
 		JSONResponse(w, models.Response{Success: false, Message: "SMS profile not found"}, http.StatusNotFound)
 		return
@@ -71,7 +84,7 @@ func (as *Server) SMSProfile(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "GET":
 		JSONResponse(w, s, http.StatusOK)
 	case r.Method == "DELETE":
-		err = models.DeleteSMS(id, ctx.Get(r, "user_id").(int64))
+		err = models.DeleteSMSForTenant(id, scope.TenantID, userID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error deleting SMS profile"}, http.StatusInternalServerError)
 			return
@@ -93,8 +106,9 @@ func (as *Server) SMSProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.ModifiedDate = time.Now().UTC()
-		s.UserId = ctx.Get(r, "user_id").(int64)
-		err = models.PutSMS(&s)
+		s.UserId = userID
+		s.TenantID = scope.TenantID
+		err = models.PutSMSForTenant(&s, scope.TenantID, userID)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Error updating SMS profile"}, http.StatusInternalServerError)
 			return
@@ -106,9 +120,14 @@ func (as *Server) SMSProfile(w http.ResponseWriter, r *http.Request) {
 // SMSProfileBalance handles requests for the /api/sms/:id/balance endpoint
 // It retrieves the current account balance from the SMS provider
 func (as *Server) SMSProfileBalance(w http.ResponseWriter, r *http.Request) {
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 	vars := mux.Vars(r)
 	id, _ := strconv.ParseInt(vars["id"], 0, 64)
-	s, err := models.GetSMS(id, ctx.Get(r, "user_id").(int64))
+	s, err := models.GetSMSForTenant(id, scope.TenantID, ctx.Get(r, "user_id").(int64))
 	if err != nil {
 		JSONResponse(w, models.Response{Success: false, Message: "SMS profile not found"}, http.StatusNotFound)
 		return

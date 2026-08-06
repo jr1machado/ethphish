@@ -240,8 +240,8 @@ func (js *JobService) generateReport(report models.Report) error {
 }
 
 // GetJobStatus returns the current status of a job
-func (js *JobService) GetJobStatus(reportId int64, userId int64) (*JobStatus, error) {
-	report, err := models.GetReport(reportId, userId)
+func (js *JobService) GetJobStatus(reportId int64, tenantId int64, userId int64) (*JobStatus, error) {
+	report, err := models.GetReportForTenant(reportId, tenantId, userId)
 	if err != nil {
 		return nil, err
 	}
@@ -283,11 +283,12 @@ func (js *JobService) GetJobStatus(reportId int64, userId int64) (*JobStatus, er
 }
 
 // QueueReport creates a new report job and queues it for processing
-func (js *JobService) QueueReport(userId int64, campaignIds []int64, format ReportFormat, options ReportOptions) (int64, error) {
+func (js *JobService) QueueReport(tenantId, userId int64, campaignIds []int64, format ReportFormat, options ReportOptions) (int64, error) {
 	report := models.Report{
-		UserId: userId,
-		Format: string(format),
-		Status: models.ReportStatusQueued,
+		TenantID: tenantId,
+		UserId:   userId,
+		Format:   string(format),
+		Status:   models.ReportStatusQueued,
 	}
 
 	// Set campaign IDs
@@ -309,7 +310,7 @@ func (js *JobService) QueueReport(userId int64, campaignIds []int64, format Repo
 	}
 
 	// Create the report
-	err = models.PostReport(&report)
+	err = models.PostReportForTenant(&report, tenantId)
 	if err != nil {
 		return 0, fmt.Errorf("error creating report: %v", err)
 	}

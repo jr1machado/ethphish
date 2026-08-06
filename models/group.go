@@ -17,6 +17,7 @@ import (
 // Groups contain 1..* Targets
 type Group struct {
 	Id           int64     `json:"id"`
+	TenantID     int64     `json:"-" gorm:"column:tenant_id;default:1"`
 	UserId       int64     `json:"-"`
 	Name         string    `json:"name"`
 	ModifiedDate time.Time `json:"modified_date"`
@@ -50,7 +51,8 @@ type GroupTarget struct {
 // Target contains the fields needed for individual targets specified by the user
 // Groups contain 1..* Targets, but 1 Target may belong to 1..* Groups
 type Target struct {
-	Id int64 `json:"-"`
+	Id       int64 `json:"-"`
+	TenantID int64 `json:"-" gorm:"column:tenant_id;default:1"`
 	BaseRecipient
 }
 
@@ -126,6 +128,60 @@ func GetGroups(uid int64) ([]Group, error) {
 		}
 	}
 	return gs, nil
+}
+
+// GetGroupsForTenant returns only the groups and targets belonging to the
+// selected tenant. Targets are filtered independently as a defence in depth
+// measure while the group-target relation is migrated.
+func GetGroupsForTenant(tenantID, uid int64) ([]Group, error) {
+	gs := []Group{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND user_id=?", tenantID, uid).Find(&gs).Error; err != nil {
+			return err
+		}
+		for i := range gs {
+			targets, err := getTargetsForTenant(tx, gs[i].Id, tenantID)
+			if err != nil {
+				return err
+			}
+			gs[i].Targets = targets
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return gs, err
+}
+
+func getTargetsForTenant(tx *gorm.DB, groupID, tenantID int64) ([]Target, error) {
+	ts := []Target{}
+	err := tx.Table("targets").
+		Select("targets.id, targets.tenant_id, targets.email, targets.phone, targets.first_name, targets.last_name, targets.position, targets.custom").
+		Joins("JOIN group_targets gt ON targets.id = gt.target_id").
+		Where("gt.group_id=? AND targets.tenant_id=?", groupID, tenantID).
+		Scan(&ts).Error
+	return ts, err
+}
+
+// GetGroupByNameForTenant scopes duplicate-name validation to a tenant.
+func GetGroupByNameForTenant(name string, tenantID, uid int64) (Group, error) {
+	g := Group{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("tenant_id=? AND user_id=? AND name=?", tenantID, uid, name).First(&g).Error; err != nil {
+			return err
+		}
+		targets, err := getTargetsForTenant(tx, g.Id, tenantID)
+		if err != nil {
+			return err
+		}
+		g.Targets = targets
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return g, err
 }
 
 // GetGroupSummaries returns the summaries for the groups
@@ -221,6 +277,25 @@ func GetGroup(id int64, uid int64) (Group, error) {
 	return g, nil
 }
 
+func GetGroupForTenant(id, tenantID, uid int64) (Group, error) {
+	g := Group{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).First(&g).Error; err != nil {
+			return err
+		}
+		targets, err := getTargetsForTenant(tx, g.Id, tenantID)
+		if err != nil {
+			return err
+		}
+		g.Targets = targets
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return g, err
+}
+
 // GetGroupSummary returns the summary for the requested group
 func GetGroupSummary(id int64, uid int64) (GroupSummary, error) {
 	g := GroupSummary{}
@@ -236,6 +311,42 @@ func GetGroupSummary(id int64, uid int64) (GroupSummary, error) {
 		return g, err
 	}
 	return g, nil
+}
+
+func GetGroupSummaryForTenant(id, tenantID, uid int64) (GroupSummary, error) {
+	g := GroupSummary{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Table("groups").Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).
+			Select("id, name, modified_date, locked").Scan(&g).Error; err != nil {
+			return err
+		}
+		return tx.Table("group_targets").Where("group_id=?", id).Count(&g.NumTargets).Error
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return g, err
+}
+
+func GetGroupSummariesForTenant(tenantID, uid int64) (GroupSummaries, error) {
+	gs := GroupSummaries{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Table("groups").Where("tenant_id=? AND user_id=?", tenantID, uid).
+			Select("id, name, modified_date, locked").Scan(&gs.Groups).Error; err != nil {
+			return err
+		}
+		for i := range gs.Groups {
+			if err := tx.Table("group_targets").Where("group_id=?", gs.Groups[i].Id).Count(&gs.Groups[i].NumTargets).Error; err != nil {
+				return err
+			}
+		}
+		gs.Total = int64(len(gs.Groups))
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return gs, err
 }
 
 // GetGroupByName returns the group, if it exists, specified by the given name and user_id.
@@ -281,6 +392,27 @@ func PostGroup(g *Group) error {
 		return err
 	}
 	return nil
+}
+
+// PostGroupForTenant creates the group and its targets in a tenant-bound
+// transaction. Target reuse is limited to the same tenant.
+func PostGroupForTenant(g *Group, tenantID int64) error {
+	if err := g.Validate(); err != nil {
+		return err
+	}
+	g.TenantID = tenantID
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Save(g).Error; err != nil {
+			return err
+		}
+		for _, target := range g.Targets {
+			target.TenantID = tenantID
+			if err := insertTargetIntoGroup(tx, target, g.Id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // PutGroup updates the given group if found in the database.
@@ -429,6 +561,21 @@ func PutGroup(g *Group) error {
 	return nil
 }
 
+// PutGroupForTenant verifies group ownership before invoking the established
+// target-reconciliation routine. The inner routine operates only on the
+// verified group ID and every incoming target receives the selected tenant.
+func PutGroupForTenant(g *Group, tenantID, uid int64) error {
+	if _, err := GetGroupForTenant(g.Id, tenantID, uid); err != nil {
+		return err
+	}
+	g.TenantID = tenantID
+	g.UserId = uid
+	for i := range g.Targets {
+		g.Targets[i].TenantID = tenantID
+	}
+	return PutGroup(g)
+}
+
 // ToggleGroupLock flips the locked flag for the given group.
 func ToggleGroupLock(id int64, uid int64) (Group, error) {
 	g := Group{}
@@ -438,6 +585,18 @@ func ToggleGroupLock(id int64, uid int64) (Group, error) {
 	}
 	g.Locked = !g.Locked
 	err = db.Model(&g).Update("locked", g.Locked).Error
+	return g, err
+}
+
+func ToggleGroupLockForTenant(id, tenantID, uid int64) (Group, error) {
+	g, err := GetGroupForTenant(id, tenantID, uid)
+	if err != nil {
+		return g, err
+	}
+	g.Locked = !g.Locked
+	err = withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Model(&Group{}).Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).Update("locked", g.Locked).Error
+	})
 	return g, err
 }
 
@@ -458,10 +617,26 @@ func DeleteGroup(g *Group) error {
 	return err
 }
 
+func DeleteGroupForTenant(id, tenantID, uid int64) error {
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		var group Group
+		if err := tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).First(&group).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("group_id=?", id).Delete(&GroupTarget{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id=? AND tenant_id=? AND user_id=?", id, tenantID, uid).Delete(&Group{}).Error
+	})
+}
+
 // ErrNoContactInfoSpecified is thrown when neither email nor phone is provided for a target
 var ErrNoContactInfoSpecified = errors.New("Either email or phone must be specified")
 
 func insertTargetIntoGroup(tx *gorm.DB, t Target, gid int64) error {
+	if t.TenantID == 0 {
+		t.TenantID = 1
+	}
 	// Check if either email or phone is provided
 	if t.Email == "" && t.Phone == "" {
 		return ErrNoContactInfoSpecified
@@ -504,20 +679,20 @@ func insertTargetIntoGroup(tx *gorm.DB, t Target, gid int64) error {
 	// Build a query that can find targets by either email or phone or both
 	if t.Email != "" && t.Phone != "" {
 		// If both email and phone are provided, check for either match
-		query = query.Where("email = ? OR phone = ?", t.Email, t.Phone)
+		query = query.Where("tenant_id = ? AND (email = ? OR phone = ?)", t.TenantID, t.Email, t.Phone)
 		log.WithFields(logrus.Fields{
 			"email": t.Email,
 			"phone": t.Phone,
 		}).Debug("Searching for target by both email and phone")
 	} else if t.Email != "" {
 		// If only email is provided
-		query = query.Where("email = ?", t.Email)
+		query = query.Where("tenant_id = ? AND email = ?", t.TenantID, t.Email)
 		log.WithFields(logrus.Fields{
 			"email": t.Email,
 		}).Debug("Searching for target by email")
 	} else if t.Phone != "" {
 		// If only phone is provided
-		query = query.Where("phone = ?", t.Phone)
+		query = query.Where("tenant_id = ? AND phone = ?", t.TenantID, t.Phone)
 		log.WithFields(logrus.Fields{
 			"phone": t.Phone,
 		}).Debug("Searching for target by phone")

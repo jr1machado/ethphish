@@ -9,3 +9,16 @@ https://localhost:9443 {
         }
     }
 }
+
+# The admin app emits root-relative redirects and asset links ("/", "/js/..."),
+# so it isn't safe to mount under a path prefix on the same listener (a
+# handle_path /admin* block breaks navigation past the login redirect). A
+# dedicated port avoids that entirely.
+https://localhost:9444 {
+    tls internal
+    reverse_proxy https://server:3333 {
+        transport http {
+            tls_insecure_skip_verify
+        }
+    }
+}

@@ -5,11 +5,13 @@ import (
 	"time"
 
 	log "github.com/gophish/gophish/logger"
+	"github.com/jinzhu/gorm"
 )
 
 // Report represents a report generation job
 type Report struct {
 	Id            int64      `json:"id" gorm:"column:id;primary_key;AUTO_INCREMENT"`
+	TenantID      int64      `json:"-" gorm:"column:tenant_id;default:1"`
 	UserId        int64      `json:"user_id" gorm:"column:user_id"`
 	CampaignIds   string     `json:"campaign_ids" gorm:"column:campaign_ids"` // JSON array
 	CampaignSetId *int64     `json:"campaign_set_id,omitempty" gorm:"column:campaign_set_id"`
@@ -106,6 +108,94 @@ func GetReport(id int64, uid int64) (Report, error) {
 		log.Error(err)
 	}
 	return r, err
+}
+
+// GetReportsForTenant returns all reports for a tenant and user
+func GetReportsForTenant(tenantID, uid int64) ([]Report, error) {
+	reports := []Report{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id = ? AND user_id = ?", tenantID, uid).Order("created_at DESC").Find(&reports).Error
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return reports, err
+}
+
+// GetReportForTenant returns a report by ID scoped to a tenant and user
+func GetReportForTenant(id, tenantID, uid int64) (Report, error) {
+	r := Report{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id = ? AND tenant_id = ? AND user_id = ?", id, tenantID, uid).First(&r).Error
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return r, err
+}
+
+// PostReportForTenant creates a new report inside a tenant-bound transaction
+func PostReportForTenant(r *Report, tenantID int64) error {
+	if r.Status == "" {
+		r.Status = ReportStatusQueued
+	}
+	if r.CreatedAt.IsZero() {
+		r.CreatedAt = time.Now().UTC()
+	}
+	if r.ExpiresAt == nil {
+		expiresAt := time.Now().UTC().AddDate(0, 0, 30)
+		r.ExpiresAt = &expiresAt
+	}
+	r.TenantID = tenantID
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Create(r).Error
+	})
+}
+
+// DeleteReportForTenant deletes a report by ID scoped to a tenant and user
+func DeleteReportForTenant(id, tenantID, uid int64) error {
+	return withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		return tx.Where("id = ? AND tenant_id = ? AND user_id = ?", id, tenantID, uid).Delete(&Report{}).Error
+	})
+}
+
+// GetReportStatsForTenant returns statistics about reports for a tenant and user
+func GetReportStatsForTenant(tenantID, uid int64) (map[string]int, error) {
+	stats := map[string]int{
+		"total":      0,
+		"queued":     0,
+		"processing": 0,
+		"completed":  0,
+		"failed":     0,
+	}
+
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		var totalCount int64
+		if err := tx.Model(&Report{}).Where("tenant_id = ? AND user_id = ?", tenantID, uid).Count(&totalCount).Error; err != nil {
+			return err
+		}
+		stats["total"] = int(totalCount)
+
+		type StatusCount struct {
+			Status string
+			Count  int
+		}
+		var statusCounts []StatusCount
+		if err := tx.Model(&Report{}).Select("status, COUNT(*) as count").
+			Where("tenant_id = ? AND user_id = ?", tenantID, uid).
+			Group("status").
+			Scan(&statusCounts).Error; err != nil {
+			return err
+		}
+		for _, sc := range statusCounts {
+			stats[sc.Status] = sc.Count
+		}
+		return nil
+	})
+	if err != nil {
+		log.Error(err)
+	}
+	return stats, err
 }
 
 // PostReport creates a new report in the database
