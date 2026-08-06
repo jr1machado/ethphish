@@ -43,7 +43,21 @@ type Campaign struct {
 	HTTPAuth      bool        `json:"basicauth" sql:"column:http_auth"`
 	CampaignSetId int64       `json:"campaign_set_id,omitempty"`
 	ContractID    *int64      `json:"contract_id,omitempty" gorm:"column:contract_id"`
+	// TrainingID and TrainingTrigger implement the "teachable moment"
+	// delivery path (see models/training_assignment.go): when set, a
+	// matching click/submit event on this campaign spawns a
+	// TrainingAssignment and redirects the target into the training
+	// instead of the normal landing-page response.
+	TrainingID      *int64 `json:"training_id,omitempty" gorm:"column:training_id"`
+	TrainingTrigger string `json:"training_trigger" gorm:"column:training_trigger"`
 }
+
+// Training trigger values for Campaign.TrainingTrigger.
+const (
+	TrainingTriggerClick  string = "click"
+	TrainingTriggerSubmit string = "submit"
+	TrainingTriggerBoth   string = "both"
+)
 
 // CampaignResults is a struct representing the results from a campaign
 type CampaignResults struct {

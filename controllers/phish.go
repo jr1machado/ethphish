@@ -149,6 +149,7 @@ func (ps *PhishingServer) registerRoutes() {
 	router.HandleFunc("/replied", ps.RepliedHandler)
 	ps.registerApprovalPortalRoutes(router)
 	ps.registerClientPortalRoutes(router)
+	ps.registerTrainingRoutes(router)
 	router.HandleFunc("/{path:.*}", ps.PhishHandler)
 
 	// Setup GZIP compression
@@ -359,6 +360,14 @@ func (ps *PhishingServer) PhishHandler(w http.ResponseWriter, r *http.Request) {
 				log.Error(err)
 			}
 		}
+	}
+
+	// Teachable moment: if this campaign names a training and the event
+	// that just fired matches its configured trigger, send the target
+	// into the training instead of the normal landing-page response. See
+	// controllers/training_delivery.go and models/training_assignment.go.
+	if ps.maybeRedirectToTraining(w, r, c, rs) {
+		return
 	}
 
 	var ptx models.PhishingTemplateContext

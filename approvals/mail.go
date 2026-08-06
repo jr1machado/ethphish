@@ -135,6 +135,19 @@ func SendPortalLoginEmail(tenantID int64, to, name, portalURL string) error {
 	return sendSystem(tenantID, to, subject, body)
 }
 
+// SendTrainingAssignmentEmail notifies a target they've been assigned an
+// awareness training, with their unique access link. Admin-triggered
+// (via the "Assign to Group" action), so it uses send (uid-scoped SMTP
+// profile), not sendSystem.
+func SendTrainingAssignmentEmail(tenantID, uid int64, to, name, trainingName, link string) error {
+	subject := fmt.Sprintf("Training assigned: %q", trainingName)
+	body := fmt.Sprintf(
+		"Hello %s,\n\nYou've been assigned the training %q.\n\nStart here:\n%s\n\n-- EthPhish",
+		name, trainingName, link,
+	)
+	return send(tenantID, uid, to, subject, body)
+}
+
 // SendDecisionNotificationEmail tells the admin who requested an approval
 // what the client decided.
 func SendDecisionNotificationEmail(tenantID, uid int64, adminRecipient, contractName, status, comment string) error {

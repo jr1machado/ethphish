@@ -114,6 +114,16 @@
                         <option value="">No contract — campaign runs without an approval gate</option>
                     </select>
 
+                    <label class="control-label" for="training">Training (optional):</label>
+                    <select class="form-control" id="training">
+                        <option value="">No training — targets go straight to the landing page</option>
+                    </select>
+                    <div class="radio-inline" style="margin-top:6px;">
+                        <label><input type="radio" name="training_trigger" value="click" checked> On click</label>
+                        <label><input type="radio" name="training_trigger" value="submit"> On form submit</label>
+                        <label><input type="radio" name="training_trigger" value="both"> Both</label>
+                    </div>
+
                     <!-- Email Template (shown for email campaigns) -->
                     <div id="email_template_div">
                         <label class="control-label" for="template">Email Template:</label>

@@ -143,6 +143,15 @@ func (as *Server) registerRoutes() {
 	router.HandleFunc("/approvals/{id:[0-9]+}/resend", as.ApprovalResend)
 	router.HandleFunc("/approvals/{id:[0-9]+}/comments", as.ApprovalComment)
 	router.HandleFunc("/approvals/{id:[0-9]+}/export", as.ApprovalExport)
+
+	// Training and quiz (Sprint 07 item 7.6)
+	router.HandleFunc("/trainings/", as.Trainings)
+	router.HandleFunc("/trainings/{id:[0-9]+}", as.TrainingID)
+	router.HandleFunc("/trainings/{id:[0-9]+}/lessons", as.TrainingLessons)
+	router.HandleFunc("/trainings/{id:[0-9]+}/lessons/{lessonId:[0-9]+}", as.TrainingLessonID)
+	router.HandleFunc("/trainings/{id:[0-9]+}/quiz", as.TrainingQuiz)
+	router.HandleFunc("/trainings/{id:[0-9]+}/quiz/questions", as.TrainingQuizQuestions)
+	router.HandleFunc("/trainings/{id:[0-9]+}/assign", as.TrainingAssign)
 	as.handler = router
 }
 

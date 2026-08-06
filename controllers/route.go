@@ -196,6 +196,7 @@ func (as *AdminServer) registerRoutes() {
 	router.HandleFunc("/groups", mid.Use(as.Groups, mid.RequireLogin))
 	router.HandleFunc("/contracts", mid.Use(as.Contracts, mid.RequireLogin))
 	router.HandleFunc("/approvals", mid.Use(as.ApprovalsCenter, mid.RequireLogin))
+	router.HandleFunc("/trainings", mid.Use(as.Trainings, mid.RequireLogin))
 	router.HandleFunc("/landing_pages", mid.Use(as.LandingPages, mid.RequireLogin))
 	router.HandleFunc("/sending_profiles", mid.Use(as.SendingProfiles, mid.RequireLogin))
 	router.HandleFunc("/non_campaign_reports", mid.Use(as.NonCampaignReports, mid.RequireLogin))
@@ -335,6 +336,14 @@ func (as *AdminServer) ApprovalsCenter(w http.ResponseWriter, r *http.Request) {
 	params := newTemplateParams(r)
 	params.Title = "Approval Center"
 	getTemplate(w, "approvals").ExecuteTemplate(w, "base", params)
+}
+
+// Trainings handles the default path and template execution for the
+// Trainings admin page.
+func (as *AdminServer) Trainings(w http.ResponseWriter, r *http.Request) {
+	params := newTemplateParams(r)
+	params.Title = "Trainings"
+	getTemplate(w, "trainings").ExecuteTemplate(w, "base", params)
 }
 
 // LandingPages handles the default path and template execution

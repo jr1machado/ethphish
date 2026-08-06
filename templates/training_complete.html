@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Training.Name}} - {{if .Passed}}Complete{{else}}Not Passed{{end}}</title>
+    <style>
+        body { font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; background: #f4f6f8; color: #1c222b; margin: 0; }
+        .wrap { max-width: 480px; margin: 80px auto; padding: 0 20px; }
+        .card { background: linear-gradient(135deg, {{if .Passed}}#1e3a5f 0%, #17998a{{else}}#8a1e1e 0%, #c62828{{end}} 100%); border-radius: 10px; padding: 30px 35px; color: #fff; text-align: center; box-shadow: 0 4px 18px rgba(0,0,0,.18); }
+        .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.85); }
+        h1 { margin: 10px 0; font-size: 26px; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="card">
+            <span class="eyebrow">{{.Training.Name}}</span>
+            {{if .Passed}}
+            <h1>Training complete</h1>
+            <p>Thanks for completing this training{{if .Score}} — you scored {{.Score}}%{{end}}.</p>
+            {{else}}
+            <h1>Not passed</h1>
+            <p>You scored {{.Score}}%. Ask your EthPhish contact if you need another attempt.</p>
+            {{end}}
+        </div>
+    </div>
+</body>
+
+</html>
