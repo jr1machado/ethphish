@@ -15,15 +15,20 @@ import (
 // SendTestEmail sends a test email using the template name
 // and Target given.
 func (as *Server) SendTestEmail(w http.ResponseWriter, r *http.Request) {
-	s := &models.EmailRequest{
-		ErrorChan: make(chan error),
-		UserId:    ctx.Get(r, "user_id").(int64),
-	}
 	if r.Method != "POST" {
 		JSONResponse(w, models.Response{Success: false, Message: "Method not allowed"}, http.StatusBadRequest)
 		return
 	}
-	err := json.NewDecoder(r.Body).Decode(s)
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
+	s := &models.EmailRequest{
+		ErrorChan: make(chan error),
+		UserId:    ctx.Get(r, "user_id").(int64),
+	}
+	err = json.NewDecoder(r.Body).Decode(s)
 	if err != nil {
 		JSONResponse(w, models.Response{Success: false, Message: "Error decoding JSON Request"}, http.StatusBadRequest)
 		return
@@ -48,7 +53,7 @@ func (as *Server) SendTestEmail(w http.ResponseWriter, r *http.Request) {
 		s.Template = t
 	} else {
 		// Get the Template requested by name
-		s.Template, err = models.GetTemplateByName(s.Template.Name, s.UserId)
+		s.Template, err = models.GetTemplateByNameForTenant(s.Template.Name, scope.TenantID, s.UserId)
 		if err == gorm.ErrRecordNotFound {
 			log.WithFields(logrus.Fields{
 				"template": s.Template.Name,
@@ -67,7 +72,7 @@ func (as *Server) SendTestEmail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.Page.Name != "" {
-		s.Page, err = models.GetPageByName(s.Page.Name, s.UserId)
+		s.Page, err = models.GetPageByNameForTenant(s.Page.Name, scope.TenantID, s.UserId)
 		if err == gorm.ErrRecordNotFound {
 			log.WithFields(logrus.Fields{
 				"page": s.Page.Name,
@@ -85,7 +90,7 @@ func (as *Server) SendTestEmail(w http.ResponseWriter, r *http.Request) {
 	// If a complete sending profile is provided use it
 	if err := s.SMTP.Validate(); err != nil {
 		// Otherwise get the SMTP requested by name
-		smtp, lookupErr := models.GetSMTPByName(s.SMTP.Name, s.UserId)
+		smtp, lookupErr := models.GetSMTPByNameForTenant(s.SMTP.Name, scope.TenantID, s.UserId)
 		// If the Sending Profile doesn't exist, let's err on the side
 		// of caution and assume that the validation failure was more important.
 		if lookupErr != nil {
@@ -139,11 +144,16 @@ func (as *Server) SendTestEmail(w http.ResponseWriter, r *http.Request) {
 func (as *Server) SendTestSMS(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == "POST":
+		scope, err := ctx.RequireTenantScope(r)
+		if err != nil {
+			JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+			return
+		}
 		s := &models.SMSRequest{
 			ErrorChan: make(chan error),
 			UserId:    ctx.Get(r, "user_id").(int64),
 		}
-		err := json.NewDecoder(r.Body).Decode(s)
+		err = json.NewDecoder(r.Body).Decode(s)
 		if err != nil {
 			JSONResponse(w, models.Response{Success: false, Message: "Invalid request"}, http.StatusBadRequest)
 			return
@@ -167,7 +177,7 @@ func (as *Server) SendTestSMS(w http.ResponseWriter, r *http.Request) {
 			s.SMSTemplate = t
 		} else {
 			// Get the SMS Template requested by name
-			s.SMSTemplate, err = models.GetSMSTemplateByName(s.SMSTemplate.Name, s.UserId)
+			s.SMSTemplate, err = models.GetSMSTemplateByNameForTenant(s.SMSTemplate.Name, scope.TenantID, s.UserId)
 			if err == gorm.ErrRecordNotFound {
 				log.WithFields(logrus.Fields{
 					"template": s.SMSTemplate.Name,
@@ -188,7 +198,7 @@ func (as *Server) SendTestSMS(w http.ResponseWriter, r *http.Request) {
 		// If a complete SMS profile is provided use it
 		if err := s.SMS.Validate(); err != nil {
 			// Otherwise get the SMS profile requested by name
-			sms, lookupErr := models.GetSMSByName(s.SMS.Name, s.UserId)
+			sms, lookupErr := models.GetSMSByNameForTenant(s.SMS.Name, scope.TenantID, s.UserId)
 			// If the SMS Profile doesn't exist, let's err on the side
 			// of caution and assume that the validation failure was more important.
 			if lookupErr != nil {

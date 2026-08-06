@@ -319,7 +319,7 @@ func AddEvent(e *Event, campaignID int64) error {
 	e.Time = time.Now().UTC()
 
 	var campaignTenantID int64
-	if err := db.Table("campaigns").Where("id=?", campaignID).Pluck("tenant_id", &campaignTenantID).Error; err != nil {
+	if err := db.Table("campaigns").Select("tenant_id").Where("id=?", campaignID).Row().Scan(&campaignTenantID); err != nil {
 		log.Errorf("error resolving campaign tenant for webhook delivery: %v", err)
 	}
 

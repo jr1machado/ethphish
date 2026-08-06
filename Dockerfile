@@ -11,7 +11,8 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/ethphish .
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/ethphish . \
+    && CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/postgres-schema-prepare ./cmd/postgres-schema-prepare
 
 FROM backend AS test
 ARG TEST_PACKAGES=./...
@@ -29,6 +30,7 @@ RUN apt-get update \
 WORKDIR /opt/ethphish
 ENV ETHPHISH_RUNTIME_ENV=production
 COPY --from=backend /out/ethphish ./ethphish
+COPY --from=backend /out/postgres-schema-prepare ./postgres-schema-prepare
 COPY --from=backend /src/config.json /src/VERSION /src/ANGLERPHISH_VERSION /src/LICENSE ./
 COPY --from=backend /src/db/db_postgres ./db/db_postgres
 COPY --from=backend /src/templates ./templates

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -216,6 +217,94 @@ func TestPostgresTenantFoundation(t *testing.T) {
 	protected.ServeHTTP(response, req)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("cross-tenant request returned %d, want %d", response.Code, http.StatusForbidden)
+	}
+}
+
+var dsnCredentialPattern = regexp.MustCompile(`\b(user|password)=\S+`)
+
+// restrictedAppDSN swaps the privileged migration credentials in dsn for the
+// non-superuser "ethphish_app" role created by migration
+// 20260806000005_create_restricted_app_role.sql. Only that role is subject
+// to the tenant_isolation RLS policies: the privileged role used to run
+// migrations is a PostgreSQL superuser and always bypasses RLS.
+func restrictedAppDSN(dsn string) string {
+	replaced := dsnCredentialPattern.ReplaceAllStringFunc(dsn, func(kv string) string {
+		if strings.HasPrefix(kv, "user=") {
+			return "user=ethphish_app"
+		}
+		return "password=development-only-change-me-app"
+	})
+	return replaced
+}
+
+// TestPostgresRLSEnforcesTenantIsolation verifies that the tenant_isolation
+// RLS policies actually restrict the restricted "ethphish_app" role that the
+// server connects as in production (see compose.yaml), as opposed to just
+// existing on paper. It seeds two tenants' webhooks through the privileged
+// connection (which bypasses RLS as any superuser does) and then reads/writes
+// through a second connection opened with the restricted role to prove:
+//  1. a session that sets ethphish.tenant_id only sees that tenant's rows;
+//  2. that session cannot insert a row claiming a different tenant;
+//  3. a session that never sets ethphish.tenant_id (a background worker)
+//     keeps the cross-tenant visibility it already relies on.
+func TestPostgresRLSEnforcesTenantIsolation(t *testing.T) {
+	setupPostgres(t)
+
+	suffix := time.Now().UTC().Format("20060102150405.000000000")
+	tenantA := models.Tenant{Slug: "rls-a-" + suffix, Name: "RLS tenant A " + suffix, Active: true}
+	if err := models.PostTenant(&tenantA); err != nil {
+		t.Fatalf("creating tenant A: %v", err)
+	}
+	tenantB := models.Tenant{Slug: "rls-b-" + suffix, Name: "RLS tenant B " + suffix, Active: true}
+	if err := models.PostTenant(&tenantB); err != nil {
+		t.Fatalf("creating tenant B: %v", err)
+	}
+	if err := models.PostWebhookForTenant(&models.Webhook{Name: "rls-wh-a-" + suffix, URL: "https://example.test/a", IsActive: true}, tenantA.ID); err != nil {
+		t.Fatalf("creating tenant A webhook: %v", err)
+	}
+	if err := models.PostWebhookForTenant(&models.Webhook{Name: "rls-wh-b-" + suffix, URL: "https://example.test/b", IsActive: true}, tenantB.ID); err != nil {
+		t.Fatalf("creating tenant B webhook: %v", err)
+	}
+
+	appDB, err := sql.Open("postgres", restrictedAppDSN(os.Getenv(postgresDSNEnv)))
+	if err != nil {
+		t.Fatalf("opening restricted-role connection: %v", err)
+	}
+	defer appDB.Close()
+
+	// No session variable set: a background worker's connection must keep
+	// seeing every tenant's rows for these two, plus whatever earlier tests
+	// left behind.
+	var crossTenantCount int
+	if err := appDB.QueryRow("SELECT count(*) FROM webhooks WHERE name IN ($1, $2)", "rls-wh-a-"+suffix, "rls-wh-b-"+suffix).Scan(&crossTenantCount); err != nil {
+		t.Fatalf("querying webhooks without a tenant scope: %v", err)
+	}
+	if crossTenantCount != 2 {
+		t.Fatalf("background-worker visibility = %d, want 2", crossTenantCount)
+	}
+
+	tx, err := appDB.Begin()
+	if err != nil {
+		t.Fatalf("beginning restricted-role transaction: %v", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("SELECT set_config('ethphish.tenant_id', $1, true)", fmt.Sprintf("%d", tenantA.ID)); err != nil {
+		t.Fatalf("setting tenant scope: %v", err)
+	}
+
+	var scopedCount int
+	if err := tx.QueryRow("SELECT count(*) FROM webhooks WHERE name IN ($1, $2)", "rls-wh-a-"+suffix, "rls-wh-b-"+suffix).Scan(&scopedCount); err != nil {
+		t.Fatalf("querying webhooks scoped to tenant A: %v", err)
+	}
+	if scopedCount != 1 {
+		t.Fatalf("tenant-scoped visibility = %d, want 1 (only tenant A's row)", scopedCount)
+	}
+
+	if _, err := tx.Exec(
+		"INSERT INTO webhooks (tenant_id, name, url, is_active) VALUES ($1, $2, $3, true)",
+		tenantB.ID, "rls-cross-attempt-"+suffix, "https://example.test/blocked",
+	); err == nil {
+		t.Fatal("restricted role inserted a row for a tenant outside its session scope")
 	}
 }
 

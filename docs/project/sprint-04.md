@@ -25,17 +25,32 @@ Evidência executável: `INFO/Sprint-04/ETH-401-405-foundation-validation.md`.
 
 ## Próximos incrementos
 
-1. Aplicação do middleware de seleção autorizada às rotas tenant-owned.
+1. Aplicação do middleware de seleção autorizada às rotas tenant-owned. Concluído.
 2. Consultas escopadas nas entidades prioritárias restantes. `tenant_id` e o
-   retropreenchimento controlado já foram aplicados a campanhas, grupos,
-   templates, landing pages, SMTP, SMS, IMAP, webhooks e relatórios.
+   retropreenchimento controlado foram aplicados a campanhas, grupos,
+   templates, landing pages, SMTP, SMS, IMAP, webhooks e relatórios, incluindo
+   os fluxos remanescentes que não passavam por request HTTP (monitor IMAP em
+   background, fluxo de MFA por SMS, geração de relatórios em fila). Concluído.
 3. RLS PostgreSQL transacional e testes negativos de acesso cruzado em banco
-   isolado.
+   isolado. Concluído — ver `20260806000004_enable_tenant_row_level_security.sql`
+   e `20260806000005_create_restricted_app_role.sql`.
 
-O executor transacional para RLS já está ativo nos fluxos de templates,
-landing pages, grupos e leituras administrativas de campanhas. A política RLS só será habilitada
-quando os fluxos remanescentes que acessam as mesmas tabelas estiverem
-migrados, para não interromper workers legados.
+O executor transacional para RLS está ativo em todo caminho tenant-owned
+(`withTenantTransaction`, que define `ethphish.tenant_id` via `set_config`
+local à transação). A policy `tenant_isolation` foi habilitada em campanhas,
+grupos, targets, templates, pages, smtp, sms_profiles, sms_templates, imap,
+webhooks e reports, com `FORCE ROW LEVEL SECURITY`. Sessões sem
+`ethphish.tenant_id` definido continuam vendo todas as linhas — isso é
+intencional e preserva os workers legados (monitor IMAP externo, drenagem da
+fila de relatórios, limpeza agendada) sem exigir migração deles.
+
+Achado crítico durante a implementação: a imagem oficial do PostgreSQL cria
+`POSTGRES_USER` como superusuário, e superusuário ignora RLS mesmo com
+`FORCE ROW LEVEL SECURITY`. A aplicação agora conecta em runtime com o role
+restrito `ethphish_app` (sem `SUPERUSER`/`BYPASSRLS`, criado pela migration
+005); migrations continuam rodando com o role privilegiado `ethphish`, agora
+via um passo `db-migrate` dedicado no `compose.yaml` que roda antes do
+`server`. Sem essa separação de role, a policy RLS existiria só no papel.
 
 Nenhuma rota de negócio é declarada multitenant enquanto ainda não consumir o
 `TenantScope`; essa regra evita uma alegação prematura de isolamento.

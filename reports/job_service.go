@@ -310,7 +310,7 @@ func (js *JobService) QueueReport(tenantId, userId int64, campaignIds []int64, f
 	}
 
 	// Create the report
-	err = models.PostReport(&report)
+	err = models.PostReportForTenant(&report, tenantId)
 	if err != nil {
 		return 0, fmt.Errorf("error creating report: %v", err)
 	}

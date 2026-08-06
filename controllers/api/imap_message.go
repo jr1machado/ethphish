@@ -23,6 +23,11 @@ func (as *Server) NonCampaignReportMessage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	uid := ctx.Get(r, "user_id").(int64)
+	scope, err := ctx.RequireTenantScope(r)
+	if err != nil {
+		JSONResponse(w, models.Response{Success: false, Message: "Tenant scope is required"}, http.StatusForbidden)
+		return
+	}
 
 	vars := mux.Vars(r)
 	id, err := strconv.ParseInt(vars["id"], 10, 64)
@@ -45,7 +50,7 @@ func (as *Server) NonCampaignReportMessage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	im, err := models.GetIMAPById(report.ImapId, uid)
+	im, err := models.GetIMAPByIdForTenant(report.ImapId, scope.TenantID, uid)
 	if err != nil {
 		JSONResponse(w, models.Response{
 			Success: false,
