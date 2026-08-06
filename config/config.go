@@ -97,7 +97,7 @@ func LoadConfig(filepath string) (*Config, error) {
 		return nil, fmt.Errorf("only PostgreSQL is supported by the server runtime; configure ETHPHISH_DB_DRIVER=postgres")
 	}
 	// Choosing the migrations directory based on the database used.
-	config.MigrationsPath = config.MigrationsPath + config.DBName
+	config.MigrationsPath = config.MigrationsPath + config.DBName + "/migrations"
 	// Explicitly set the TestFlag to false to prevent config.json overrides
 	config.TestFlag = false
 	return config, nil
