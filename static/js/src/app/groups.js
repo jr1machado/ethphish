@@ -19,7 +19,14 @@ function save(id) {
             email: unescapeHtml(target[2]).trim().toLowerCase(),
             phone: unescapeHtml(target[3]).replace(/\D/g, ''),
             position: unescapeHtml(target[4]),
-            custom: unescapeHtml(target[5])
+            custom: unescapeHtml(target[5]),
+            department: unescapeHtml(target[6]),
+            company: unescapeHtml(target[7]),
+            city: unescapeHtml(target[8]),
+            state: unescapeHtml(target[9]),
+            country: unescapeHtml(target[10]),
+            unit: unescapeHtml(target[11]),
+            tags: unescapeHtml(target[12])
         })
     })
     
@@ -156,6 +163,13 @@ function edit(id) {
                           escapeHtml(record.phone),
                           escapeHtml(record.position),
                           escapeHtml(record.custom),
+                          escapeHtml(record.department || ""),
+                          escapeHtml(record.company || ""),
+                          escapeHtml(record.city || ""),
+                          escapeHtml(record.state || ""),
+                          escapeHtml(record.country || ""),
+                          escapeHtml(record.unit || ""),
+                          escapeHtml(record.tags || ""),
                           '<span style="cursor:pointer;"><i class="fa fa-trash-o"></i></span>'
                       ])
                     });
@@ -163,7 +177,9 @@ function edit(id) {
                     // console.warn("No targets found in group or targets array is empty");
                 }
                 targets.DataTable().rows.add(targetRows).draw()
-                
+                refreshFilterOptions();
+                validateTargetRows();
+
                 // Store the original targets in a hidden field so we can preserve them when saving
                 $("#original_targets").val(JSON.stringify(group.targets));
             })
@@ -180,10 +196,29 @@ function edit(id) {
         },
         add: function (e, data) {
             $("#modal\\.flashes").empty()
+            var file = data.originalFiles[0];
+            var filename = file ? file['name'] : "";
+            var isXlsx = /\.xlsx$/i.test(filename);
+            if (isXlsx) {
+                var reader = new FileReader();
+                reader.onload = function (evt) {
+                    var workbook = XLSX.read(evt.target.result, { type: 'array' });
+                    var firstSheetName = workbook.SheetNames[0];
+                    var csvString = XLSX.utils.sheet_to_csv(workbook.Sheets[firstSheetName]);
+                    var csvBlob = new Blob([csvString], { type: 'text/csv' });
+                    var csvFile = new File([csvBlob], filename.replace(/\.xlsx$/i, '.csv'), { type: 'text/csv' });
+                    data.files = [csvFile];
+                    data.submit();
+                };
+                reader.onerror = function () {
+                    modalError("Error reading XLSX file");
+                };
+                reader.readAsArrayBuffer(file);
+                return;
+            }
             var acceptFileTypes = /(csv|txt)$/i;
-            var filename = data.originalFiles[0]['name']
             if (filename && !acceptFileTypes.test(filename.split(".").pop())) {
-                modalError("Unsupported file extension (use .csv or .txt)")
+                modalError("Unsupported file extension (use .csv, .txt, or .xlsx)")
                 return false;
             }
             data.submit();
@@ -196,9 +231,18 @@ function edit(id) {
                     record.email,
                     record.phone,
                     record.position,
-                    record.custom);
+                    record.custom,
+                    record.department,
+                    record.company,
+                    record.city,
+                    record.state,
+                    record.country,
+                    record.unit,
+                    record.tags);
             });
             targets.DataTable().draw();
+            refreshFilterOptions();
+            validateTargetRows();
         }
     })
 }
@@ -210,14 +254,28 @@ var downloadCSVTemplate = function () {
         'Email': 'foobar@example.com',
         'Phone': '',
         'Position': 'Systems Administrator',
-        'Custom': 'Custom value'
+        'Custom': 'Custom value',
+        'Department': 'Engineering',
+        'Company': 'Acme Corp',
+        'City': 'London',
+        'State': 'England',
+        'Country': 'UK',
+        'Unit': 'Platform',
+        'Tags': 'vip,executive'
     }, {
         'First_Name': 'Example2',
         'Last_Name': 'User2',
         'Email': '',
         'Phone': '+1234567890',
         'Position': 'Human Resources',
-        'Custom': 'Foo bar'
+        'Custom': 'Foo bar',
+        'Department': '',
+        'Company': '',
+        'City': '',
+        'State': '',
+        'Country': '',
+        'Unit': '',
+        'Tags': ''
     }]
     var filename = 'group_template.csv'
     var csvString = Papa.unparse(csvScope, {})
@@ -242,8 +300,8 @@ var downloadGroup = function(id) {
     api.groupId.get(id)
         .success(function(group) {
             // Create CSV content with underscores in headers for easy re-upload
-            var csvContent = "First_Name,Last_Name,Email,Phone,Position,Custom\n";
-            
+            var csvContent = "First_Name,Last_Name,Email,Phone,Position,Custom,Department,Company,City,State,Country,Unit,Tags\n";
+
             // Add each target to the CSV
             $.each(group.targets, function(i, target) {
                 // Properly escape fields that might contain commas
@@ -253,9 +311,17 @@ var downloadGroup = function(id) {
                 var phone = escapeCsvField(target.phone);
                 var position = escapeCsvField(target.position);
                 var custom = escapeCsvField(target.custom);
-                
+                var department = escapeCsvField(target.department);
+                var company = escapeCsvField(target.company);
+                var city = escapeCsvField(target.city);
+                var state = escapeCsvField(target.state);
+                var country = escapeCsvField(target.country);
+                var unit = escapeCsvField(target.unit);
+                var tags = escapeCsvField(target.tags);
+
                 // Add the row to CSV content
-                csvContent += firstName + "," + lastName + "," + email + "," + phone + "," + position + "," + custom + "\n";
+                csvContent += firstName + "," + lastName + "," + email + "," + phone + "," + position + "," + custom +
+                    "," + department + "," + company + "," + city + "," + state + "," + country + "," + unit + "," + tags + "\n";
             });
             
             // Create a blob with the CSV content
@@ -380,7 +446,8 @@ var deleteGroup = function (id) {
     })
 }
 
-function addTarget(firstNameInput, lastNameInput, emailInput, phoneInput, positionInput, customInput) {
+function addTarget(firstNameInput, lastNameInput, emailInput, phoneInput, positionInput, customInput,
+    departmentInput, companyInput, cityInput, stateInput, countryInput, unitInput, tagsInput) {
     // Create new data row.
     var email = emailInput ? escapeHtml(emailInput).toLowerCase() : "";
     var phone = phoneInput ? escapeHtml(phoneInput) : "";
@@ -391,6 +458,13 @@ function addTarget(firstNameInput, lastNameInput, emailInput, phoneInput, positi
         phone,
         escapeHtml(positionInput),
         escapeHtml(customInput),
+        escapeHtml(departmentInput || ""),
+        escapeHtml(companyInput || ""),
+        escapeHtml(cityInput || ""),
+        escapeHtml(stateInput || ""),
+        escapeHtml(countryInput || ""),
+        escapeHtml(unitInput || ""),
+        escapeHtml(tagsInput || ""),
         '<span style="cursor:pointer;"><i class="fa fa-trash-o"></i></span>'
     ];
 
@@ -536,8 +610,17 @@ $(document).ready(function () {
             email,
             phone,
             $("#position").val(),
-            $("#custom").val());
+            $("#custom").val(),
+            $("#department").val(),
+            $("#company").val(),
+            $("#city").val(),
+            $("#state").val(),
+            $("#country").val(),
+            $("#unit").val(),
+            $("#tags").val());
         targets.DataTable().draw();
+        refreshFilterOptions();
+        validateTargetRows();
 
         // Reset user input.
         $("#targetForm>div>input").val('');
@@ -550,9 +633,121 @@ $(document).ready(function () {
             .row($(this).parents('tr'))
             .remove()
             .draw();
+        refreshFilterOptions();
+        validateTargetRows();
     });
     $("#modal").on("hide.bs.modal", function () {
         dismiss();
     });
     $("#csv-template").click(downloadCSVTemplate)
+
+    $("#filterCompany, #filterDepartment, #filterCity, #filterState, #filterCountry").on('change', function () {
+        applyTargetFilters();
+    });
+    $("#filterTag").on('keyup', function () {
+        applyTargetFilters();
+    });
 });
+
+// Column indices in the #targetsTable DataTable, per the order built by
+// addTarget()/edit(): first_name, last_name, email, phone, position,
+// custom, department, company, city, state, country, unit, tags, actions.
+var TARGET_COLUMN = {
+    EMAIL: 2,
+    PHONE: 3,
+    DEPARTMENT: 6,
+    COMPANY: 7,
+    CITY: 8,
+    STATE: 9,
+    COUNTRY: 10,
+    UNIT: 11,
+    TAGS: 12
+};
+
+var emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+var phonePattern = /^\+?[0-9]{7,15}$/;
+
+// Flags rows with an invalid email/phone or a duplicate email, and updates
+// the import summary line above the grid.
+function validateTargetRows() {
+    var seenEmails = {};
+    var invalidCount = 0;
+    var duplicateCount = 0;
+    targets.DataTable().rows().every(function () {
+        var data = this.data();
+        var node = $(this.node());
+        node.removeClass('row-invalid row-duplicate');
+        var email = unescapeHtml(data[TARGET_COLUMN.EMAIL] || "");
+        var phone = unescapeHtml(data[TARGET_COLUMN.PHONE] || "");
+        var isValid = emailPattern.test(email) && (phone === '' || phonePattern.test(phone));
+        if (!isValid) {
+            node.addClass('row-invalid');
+            invalidCount++;
+        }
+        var emailKey = email.toLowerCase();
+        if (emailKey) {
+            if (seenEmails[emailKey]) {
+                node.addClass('row-duplicate');
+                duplicateCount++;
+            }
+            seenEmails[emailKey] = true;
+        }
+    });
+    var total = targets.DataTable().rows().count();
+    var needsAttention = invalidCount + duplicateCount;
+    if (needsAttention > 0) {
+        $("#importSummary").text(total + " imported, " + needsAttention + " need attention");
+    } else if (total > 0) {
+        $("#importSummary").text(total + " imported");
+    } else {
+        $("#importSummary").text("");
+    }
+}
+
+// Rebuilds the segmentation filter dropdown options from the values
+// currently present in the grid.
+function refreshFilterOptions() {
+    var companies = {}, departments = {}, cities = {}, states = {}, countries = {};
+    targets.DataTable().rows().every(function () {
+        var data = this.data();
+        var department = unescapeHtml(data[TARGET_COLUMN.DEPARTMENT] || "");
+        var company = unescapeHtml(data[TARGET_COLUMN.COMPANY] || "");
+        var city = unescapeHtml(data[TARGET_COLUMN.CITY] || "");
+        var state = unescapeHtml(data[TARGET_COLUMN.STATE] || "");
+        var country = unescapeHtml(data[TARGET_COLUMN.COUNTRY] || "");
+        if (department) departments[department] = true;
+        if (company) companies[company] = true;
+        if (city) cities[city] = true;
+        if (state) states[state] = true;
+        if (country) countries[country] = true;
+    });
+    function fillSelect(selector, values, placeholder) {
+        var select = $(selector);
+        var current = select.val();
+        select.empty().append($('<option value="">' + placeholder + '</option>'));
+        Object.keys(values).sort().forEach(function (v) {
+            select.append($('<option></option>').attr('value', v).text(v));
+        });
+        select.val(current || "");
+    }
+    fillSelect('#filterCompany', companies, 'All Companies');
+    fillSelect('#filterDepartment', departments, 'All Departments');
+    fillSelect('#filterCity', cities, 'All Cities');
+    fillSelect('#filterState', states, 'All States');
+    fillSelect('#filterCountry', countries, 'All Countries');
+}
+
+// Applies the segmentation filter controls to the targets DataTable.
+function applyTargetFilters() {
+    var dt = targets.DataTable();
+    var exact = function (value) {
+        return value ? '^' + $.fn.dataTable.util.escapeRegex(value) + '$' : '';
+    };
+    dt.column(TARGET_COLUMN.COMPANY).search(exact($("#filterCompany").val()), true, false);
+    dt.column(TARGET_COLUMN.DEPARTMENT).search(exact($("#filterDepartment").val()), true, false);
+    dt.column(TARGET_COLUMN.CITY).search(exact($("#filterCity").val()), true, false);
+    dt.column(TARGET_COLUMN.STATE).search(exact($("#filterState").val()), true, false);
+    dt.column(TARGET_COLUMN.COUNTRY).search(exact($("#filterCountry").val()), true, false);
+    dt.column(TARGET_COLUMN.TAGS).search($("#filterTag").val() || '');
+    dt.draw();
+}

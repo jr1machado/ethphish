@@ -59,7 +59,7 @@
                     <span class="btn btn-danger btn-file" data-toggle="tooltip" data-placement="right"
                         title="Supports CSV files" id="fileUpload">
                         <i class="fa fa-plus"></i> Bulk Import Users
-                        <input type="file" id="csvupload" multiple>
+                        <input type="file" id="csvupload" multiple accept=".csv,.txt,.xlsx">
                     </span>
                     <span id="csv-template" class="text-muted small">
                         <i class="fa fa-file-excel-o"></i> Download CSV Template</span>
@@ -88,9 +88,61 @@
                             <button type="submit" class="btn btn-danger btn-lg">
                                 <i class="fa fa-plus"></i> Add</button>
                         </div>
+                        <div class="col-sm-2">
+                            <input type="text" class="form-control" placeholder="Department" id="department">
+                        </div>
+                        <div class="col-sm-2">
+                            <input type="text" class="form-control" placeholder="Company" id="company">
+                        </div>
+                        <div class="col-sm-2">
+                            <input type="text" class="form-control" placeholder="City" id="city">
+                        </div>
+                        <div class="col-sm-2">
+                            <input type="text" class="form-control" placeholder="State" id="state">
+                        </div>
+                        <div class="col-sm-2">
+                            <input type="text" class="form-control" placeholder="Country" id="country">
+                        </div>
+                        <div class="col-sm-2">
+                            <input type="text" class="form-control" placeholder="Unit" id="unit">
+                        </div>
+                        <div class="col-sm-2">
+                            <input type="text" class="form-control" placeholder="Tags (comma separated)" id="tags">
+                        </div>
                     </form>
                 </div>
                 <br />
+                <div class="row" id="targetFilters" style="margin-bottom: 10px;">
+                    <div class="col-sm-2">
+                        <select id="filterCompany" class="form-control input-sm">
+                            <option value="">All Companies</option>
+                        </select>
+                    </div>
+                    <div class="col-sm-2">
+                        <select id="filterDepartment" class="form-control input-sm">
+                            <option value="">All Departments</option>
+                        </select>
+                    </div>
+                    <div class="col-sm-2">
+                        <select id="filterCity" class="form-control input-sm">
+                            <option value="">All Cities</option>
+                        </select>
+                    </div>
+                    <div class="col-sm-2">
+                        <select id="filterState" class="form-control input-sm">
+                            <option value="">All States</option>
+                        </select>
+                    </div>
+                    <div class="col-sm-2">
+                        <select id="filterCountry" class="form-control input-sm">
+                            <option value="">All Countries</option>
+                        </select>
+                    </div>
+                    <div class="col-sm-2">
+                        <input id="filterTag" type="text" class="form-control input-sm" placeholder="Filter by tag" />
+                    </div>
+                </div>
+                <div id="importSummary" class="text-muted small" style="margin-bottom: 6px;"></div>
                 <table id="targetsTable" class="table table-hover table-striped table-condensed">
                     <thead>
                         <tr>
@@ -100,6 +152,13 @@
                             <th>Phone</th>
                             <th>Position</th>
                             <th>Custom</th>
+                            <th>Department</th>
+                            <th>Company</th>
+                            <th>City</th>
+                            <th>State</th>
+                            <th>Country</th>
+                            <th>Unit</th>
+                            <th>Tags</th>
                             <th class="no-sort"></th>
                     <tbody>
                     </tbody>
