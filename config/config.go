@@ -64,6 +64,7 @@ type Config struct {
 	Logging        *log.Config   `json:"logging"`
 	ReportsConf    Reports       `json:"reports"`
 	OIDC           OIDC          `json:"oidc"`
+	RabbitMQURL    string        `json:"rabbitmq_url"`
 }
 
 // Version contains the current gophish version
@@ -161,6 +162,7 @@ func applyEnvironment(config *Config) error {
 	setString("ETHPHISH_DB_SSL_CA_PATH", &config.DBSSLCaPath)
 	setString("ETHPHISH_CONTACT_ADDRESS", &config.ContactAddress)
 	setString("ETHPHISH_REPORTS_STORAGE_PATH", &config.ReportsConf.StoragePath)
+	setString("ETHPHISH_RABBITMQ_URL", &config.RabbitMQURL)
 	setString("ETHPHISH_OIDC_ISSUER", &config.OIDC.Issuer)
 	setString("ETHPHISH_OIDC_CLIENT_ID", &config.OIDC.ClientID)
 	setString("ETHPHISH_OIDC_REDIRECT_URL", &config.OIDC.RedirectURL)

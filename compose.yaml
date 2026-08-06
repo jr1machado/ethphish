@@ -60,6 +60,7 @@ services:
       ETHPHISH_DB_MAX_IDLE_CONNECTIONS: "5"
       ETHPHISH_DB_CONNECTION_MAX_LIFETIME: 30m
       ETHPHISH_REPORTS_STORAGE_PATH: /var/lib/ethphish/reports
+      ETHPHISH_RABBITMQ_URL: amqp://ethphish:development-only-change-me@rabbitmq:5672/
     expose:
       - "3333"
       - "8080"
@@ -90,6 +91,7 @@ services:
     image: caddy:2.10.0-alpine
     ports:
       - "9443:9443"
+      - "9444:9444"
     volumes:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
     read_only: true
@@ -118,6 +120,12 @@ services:
 
   rabbitmq:
     image: rabbitmq:4.1.2-alpine
+    environment:
+      # The default "guest" user only accepts connections from localhost
+      # inside the container, which the server can't use over the compose
+      # network. Dev-only credential, matching the postgres services above.
+      RABBITMQ_DEFAULT_USER: ethphish
+      RABBITMQ_DEFAULT_PASS: development-only-change-me
     networks:
       - data_internal
     healthcheck:

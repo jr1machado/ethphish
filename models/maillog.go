@@ -281,6 +281,20 @@ func GetQueuedMailLogs(t time.Time) ([]*MailLog, error) {
 	return ms, err
 }
 
+// GetMailLogByID returns the mail log with the given ID, if it still
+// exists. A queue consumer uses this to reload a maillog by ID: Success and
+// Error both delete the row once the outcome is terminal, so a redelivered
+// message that finds no row here has already been handled and is an
+// idempotent no-op.
+func GetMailLogByID(id int64) (*MailLog, error) {
+	m := &MailLog{}
+	err := db.Where("id = ?", id).First(m).Error
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // GetMailLogsByCampaign returns all of the mail logs for a given campaign.
 func GetMailLogsByCampaign(cid int64) ([]*MailLog, error) {
 	ms := []*MailLog{}

@@ -98,6 +98,20 @@ func (mw *MailWorker) Queue(ms []Mail) {
 	mw.queue <- ms
 }
 
+// SendOne dials m's server and sends m, applying the same temporary/permanent
+// SMTP error handling as the batch path (m.Backoff/Error/Success are called
+// as appropriate; SendOne itself never returns a send-outcome error). It's
+// the entry point a queue consumer uses to process one message at a time
+// instead of the in-process []Mail batches MailWorker.Queue expects.
+func SendOne(ctx context.Context, m Mail) error {
+	dialer, err := m.GetDialer()
+	if err != nil {
+		return m.Error(err)
+	}
+	sendMail(ctx, dialer, []Mail{m})
+	return nil
+}
+
 // errorMail is a helper to handle erroring out a slice of Mail instances
 // in the case that an unrecoverable error occurs.
 func errorMail(err error, ms []Mail) {
