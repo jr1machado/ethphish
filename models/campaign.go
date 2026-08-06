@@ -43,7 +43,21 @@ type Campaign struct {
 	HTTPAuth      bool        `json:"basicauth" sql:"column:http_auth"`
 	CampaignSetId int64       `json:"campaign_set_id,omitempty"`
 	ContractID    *int64      `json:"contract_id,omitempty" gorm:"column:contract_id"`
+	// TrainingID and TrainingTrigger implement the "teachable moment"
+	// delivery path (see models/training_assignment.go): when set, a
+	// matching click/submit event on this campaign spawns a
+	// TrainingAssignment and redirects the target into the training
+	// instead of the normal landing-page response.
+	TrainingID      *int64 `json:"training_id,omitempty" gorm:"column:training_id"`
+	TrainingTrigger string `json:"training_trigger" gorm:"column:training_trigger"`
 }
+
+// Training trigger values for Campaign.TrainingTrigger.
+const (
+	TrainingTriggerClick  string = "click"
+	TrainingTriggerSubmit string = "submit"
+	TrainingTriggerBoth   string = "both"
+)
 
 // CampaignResults is a struct representing the results from a campaign
 type CampaignResults struct {
@@ -527,15 +541,15 @@ func newRecipientFlags() recipientFlags {
 // Logical implications are applied before returning. They are monotonic — they
 // only ever set flags to true — which is what makes it safe to union these maps
 // across campaigns to get a set-wide unique rollup.
-func buildRecipientStats(cid int64) (map[string]recipientFlags, int64, error) {
+func buildRecipientStats(dbHandle *gorm.DB, cid int64) (map[string]recipientFlags, int64, error) {
 	var results []Result
-	err := db.Where("campaign_id = ?", cid).Find(&results).Error
+	err := dbHandle.Where("campaign_id = ?", cid).Find(&results).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
 	var events []Event
-	err = db.Where("campaign_id = ?", cid).Order("time ASC").Find(&events).Error
+	err = dbHandle.Where("campaign_id = ?", cid).Order("time ASC").Find(&events).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -642,8 +656,15 @@ func collapseRecipientStats(recipientStats map[string]recipientFlags) CampaignSt
 	return s
 }
 
-func getCampaignStats(cid int64) (CampaignStats, error) {
-	recipientStats, total, err := buildRecipientStats(cid)
+// getCampaignStats takes an explicit *gorm.DB rather than always using the
+// package-level db: callers inside withTenantTransaction must pass the
+// transaction handle (tx), not db directly. Using db while tx is still
+// open pulls a second connection from the pool; against a pool sized for
+// one connection (the sqlite3 test database, notably) that second query
+// blocks forever waiting for a connection tx is holding — a deadlock, not
+// just wasted overhead. Non-transactional callers pass the package db.
+func getCampaignStats(dbHandle *gorm.DB, cid int64) (CampaignStats, error) {
+	recipientStats, total, err := buildRecipientStats(dbHandle, cid)
 	if err != nil {
 		return CampaignStats{}, err
 	}
@@ -701,7 +722,7 @@ func GetCampaignSummaries(uid int64) (CampaignSummaries, error) {
 		return overview, err
 	}
 	for i := range cs {
-		s, err := getCampaignStats(cs[i].Id)
+		s, err := getCampaignStats(db, cs[i].Id)
 		if err != nil {
 			log.Error(err)
 			return overview, err
@@ -721,7 +742,7 @@ func GetCampaignSummariesForTenant(tenantID, uid int64) (CampaignSummaries, erro
 			return err
 		}
 		for i := range overview.Campaigns {
-			stats, err := getCampaignStats(overview.Campaigns[i].Id)
+			stats, err := getCampaignStats(tx, overview.Campaigns[i].Id)
 			if err != nil {
 				return err
 			}
@@ -743,13 +764,58 @@ func GetCampaignSummary(id int64, uid int64) (CampaignSummary, error) {
 		log.Error(err)
 		return cs, err
 	}
-	s, err := getCampaignStats(cs.Id)
+	s, err := getCampaignStats(db, cs.Id)
 	if err != nil {
 		log.Error(err)
 		return cs, err
 	}
 	cs.Stats = s
 	return cs, nil
+}
+
+// GetCampaignSummariesForTenantAllUsers returns every campaign belonging
+// to the tenant regardless of which admin user created it — unlike
+// GetCampaignSummariesForTenant, which is scoped to one admin's own
+// campaigns. Used by the client portal, where a client is authorized by
+// tenant membership, not by owning a specific admin account. Aggregate
+// stats only (CampaignStats), never per-target rows.
+func GetCampaignSummariesForTenantAllUsers(tenantID int64) (CampaignSummaries, error) {
+	overview := CampaignSummaries{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Table("campaigns").Where("tenant_id=?", tenantID).
+			Select("id, name, created_date, launch_date, send_by_date, completed_date, status, type").Scan(&overview.Campaigns).Error; err != nil {
+			return err
+		}
+		for i := range overview.Campaigns {
+			stats, err := getCampaignStats(tx, overview.Campaigns[i].Id)
+			if err != nil {
+				return err
+			}
+			overview.Campaigns[i].Stats = stats
+		}
+		overview.Total = int64(len(overview.Campaigns))
+		return nil
+	})
+	return overview, err
+}
+
+// GetCampaignSummaryForTenantAllUsers is the single-campaign, any-owner
+// equivalent of GetCampaignSummariesForTenantAllUsers — see its comment.
+func GetCampaignSummaryForTenantAllUsers(id, tenantID int64) (CampaignSummary, error) {
+	cs := CampaignSummary{}
+	err := withTenantTransaction(tenantID, func(tx *gorm.DB) error {
+		if err := tx.Table("campaigns").Where("id=? AND tenant_id=?", id, tenantID).
+			Select("id, name, created_date, launch_date, send_by_date, completed_date, status, type").Scan(&cs).Error; err != nil {
+			return err
+		}
+		stats, err := getCampaignStats(tx, cs.Id)
+		if err != nil {
+			return err
+		}
+		cs.Stats = stats
+		return nil
+	})
+	return cs, err
 }
 
 func GetCampaignSummaryForTenant(id, tenantID, uid int64) (CampaignSummary, error) {
@@ -759,7 +825,7 @@ func GetCampaignSummaryForTenant(id, tenantID, uid int64) (CampaignSummary, erro
 			Select("id, name, created_date, launch_date, send_by_date, completed_date, status, type").Scan(&cs).Error; err != nil {
 			return err
 		}
-		stats, err := getCampaignStats(cs.Id)
+		stats, err := getCampaignStats(tx, cs.Id)
 		if err != nil {
 			return err
 		}

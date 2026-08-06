@@ -276,7 +276,7 @@ func main() {
 	middleware.Store.Options.Secure = adminConfig.UseTLS
 
 	phishConfig := conf.PhishConf
-	phishServer := controllers.NewPhishingServer(phishConfig)
+	phishServer := controllers.NewPhishingServer(phishConfig, controllers.WithApprovalPortalBaseURL(conf.ApprovalPortalBaseURL))
 
 	imapMonitor := imap.NewMonitor()
 	if *mode == "admin" || *mode == "all" {

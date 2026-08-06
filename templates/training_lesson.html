@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Lesson.Title}} - {{.Training.Name}}</title>
+    <style>
+        body { font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; background: #f4f6f8; color: #1c222b; margin: 0; }
+        .wrap { max-width: 720px; margin: 40px auto; padding: 0 20px; }
+        .hero { background: linear-gradient(135deg, #1e3a5f 0%, #17998a 100%); border-radius: 10px; padding: 25px 30px; color: #fff; margin-bottom: 25px; }
+        .hero h1 { margin: 0 0 6px 0; font-size: 24px; }
+        .hero .progress-label { font-size: 13px; color: rgba(255,255,255,.85); }
+        .card { background: #fff; border-radius: 6px; padding: 20px 25px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); line-height: 1.6; }
+        a.btn { display: inline-block; padding: 10px 24px; background: #1e3a5f; color: #fff; border-radius: 4px; text-decoration: none; font-weight: 700; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="hero">
+            <div class="progress-label">Lesson {{.Index}} of {{.Total}}</div>
+            <h1>{{.Training.Name}}</h1>
+        </div>
+        <div class="card">
+            <h3>{{.Lesson.Title}}</h3>
+            <div>{{.LessonHTML}}</div>
+        </div>
+        <a class="btn" href="{{.NextURL}}">Continue &rarr;</a>
+    </div>
+</body>
+
+</html>

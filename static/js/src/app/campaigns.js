@@ -356,10 +356,13 @@ function launch() {
                 
                 // Common campaign properties
                 var contractId = $("#contract").val();
+                var trainingId = $("#training").val();
                 campaign = {
                     name: $("#name").val(),
                     type: campaignType,
                     contract_id: contractId ? parseInt(contractId) : null,
+                    training_id: trainingId ? parseInt(trainingId) : null,
+                    training_trigger: trainingId ? $("input[name=training_trigger]:checked").val() : "",
                     url: $("#url").val(),
                     urlparam: urlparam,
                     qrsize: $("#qrsize").val(),
@@ -606,6 +609,16 @@ function setupOptions() {
             select.find("option[value!='']").remove()
             contracts.forEach(function (c) {
                 select.append($("<option>").val(c.id).text(c.name + " (" + c.client_name + ")"))
+            })
+        })
+
+    // Load trainings (optional teachable-moment redirect for this campaign)
+    api.trainings.get()
+        .success(function (trainings) {
+            var select = $("#training")
+            select.find("option[value!='']").remove()
+            trainings.forEach(function (t) {
+                select.append($("<option>").val(t.id).text(t.name))
             })
         })
 

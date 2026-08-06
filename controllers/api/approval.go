@@ -24,6 +24,7 @@ var approvalPortalBaseURL string
 func InitApprovalServices(cfg *config.Config) {
 	if cfg != nil {
 		approvalPortalBaseURL = cfg.ApprovalPortalBaseURL
+		trainingPortalBaseURL = cfg.ApprovalPortalBaseURL
 	}
 }
 

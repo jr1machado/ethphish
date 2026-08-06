@@ -1,4 +1,4 @@
-# EthPhish v0.4.0
+# EthPhish v0.5.0
 
 EthPhish é um **fork independente** do Anglerphish 1.3.0 (que por sua vez
 deriva do Gophish), evoluído como uma **plataforma corporativa completa e
@@ -29,6 +29,13 @@ aceito, e revogada automaticamente se o escopo mudar depois. Isso transforma
 "confiamos que o time seguiu o processo" em "o sistema não deixa sair sem
 aprovação documentada".
 
+A v0.5.0 fecha o outro lado do programa: quando alguém cai na simulação, o
+EthPhish já entrega o treinamento corretivo automaticamente — sem depender
+de outra ferramenta ou de um processo manual de follow-up — e também permite
+atribuir conscientização recorrente a qualquer grupo, com nota, aprovação e
+tentativas registradas por pessoa. O programa deixa de ser só "medir quem
+clicou" e passa a fechar o ciclo: medir, treinar, comprovar.
+
 **Casos de uso**
 
 - Programas recorrentes de security awareness com métricas comparáveis entre
@@ -50,6 +57,11 @@ aprovação documentada".
   pentest de engenharia social antes da execução, com registro de quem
   autorizou e qual versão do contrato foi de fato testada — sem depender de
   e-mail avulso ou planilha de controle paralela.
+- Programas de conscientização que precisam provar que quem clicou também
+  foi treinado — não só identificar o clique — com nota, aprovação e
+  histórico de tentativas por colaborador, prontos para auditoria.
+- Clientes finais (via portal) acompanhando a evolução do próprio programa
+  sem precisar pedir relatório ao time de segurança toda vez.
 
 **Dores que o EthPhish resolve**
 
@@ -69,6 +81,14 @@ aprovação documentada".
 - Dependência de operação manual do time de segurança para disparar e
   monitorar cada campanha, e para perseguir aprovadores por e-mail —
   lembretes e expiração de aprovações pendentes agora rodam sozinhos.
+- "Quem clicou recebeu algum treinamento depois?" — hoje isso costuma ser
+  outra ferramenta, outra planilha ou simplesmente não acontece. Agora é
+  automático: clicar (ou submeter) redireciona direto para a lição
+  configurada, sem etapa manual.
+- Cliente final sem visibilidade contínua do programa — antes só via
+  aprovação pontual de contrato, agora tem portal próprio com indicadores,
+  histórico e exportação, sem precisar abrir chamado com o time de
+  segurança.
 
 A plataforma preserva as fronteiras éticas em todas as camadas: mede eventos
 de interação autorizados (abertura, clique, submissão simulada, reporte) e
@@ -128,7 +148,16 @@ Desde a base Anglerphish 1.3.0:
   explícito, sem fallback para usuário sem tenant;
 - todos os binários, artefatos de release e nomes de arquivo gerados pela
   aplicação (relatórios, workflow de release do GitHub) usam **EthPhish**,
-  nunca `anglerphish`/`gophish` — ver [Convenção de nomes](#convenção-de-nomes).
+  nunca `anglerphish`/`gophish` — ver [Convenção de nomes](#convenção-de-nomes);
+- **portal do cliente ampliado** (v0.5.0): além de decidir aprovações, o
+  cliente agora acompanha todas as campanhas do tenant com indicadores
+  agregados, exporta CSV e entra por link de login self-service (sem
+  esperar uma aprovação pendente) — nunca expõe dado nomeado por alvo;
+- **treinamento e quiz** (v0.5.0): lições sequenciais em HTML, quiz misto
+  (múltipla escolha + verdadeiro/falso) com nota mínima e limite de
+  tentativas configuráveis, entregue por atribuição direta a um grupo
+  (e-mail automático) ou por redirecionamento automático pós-clique/submit
+  de uma campanha ("teachable moment"), configurável no wizard de campanha.
 
 ## Arquitetura
 
@@ -157,21 +186,30 @@ Desde a base Anglerphish 1.3.0:
                           └────────┘ └─────────────┘  └───────────────┘
 ```
 
-Na v0.4.0, o servidor central concentra admin, API, web de campanhas,
-**portal do cliente aprovador**, scheduler (incluindo o cron de
-lembrete/expiração de aprovações) e um **pool de goroutines interno** que
-consome a fila `mail.send`; não existe ainda um processo worker externo ao
-servidor. A separação real em worker nodes (identidade e segredos próprios,
-sem acesso direto ao PostgreSQL, comunicação por AMQP TLS 5671) permanece
-como arquitetura-alvo — RabbitMQ hoje já está no caminho crítico de entrega
-de e-mail (campanha **e** aprovação), mas isso não deve ser confundido com
+Na v0.5.0, o servidor central concentra admin, API, web de campanhas,
+**portal do cliente aprovador** (`/approvals/*` — decisão pontual),
+**portal do cliente completo** (`/portal/*` — indicadores contínuos,
+login self-service), **entrega de treinamento/quiz** (`/training/{token}`),
+scheduler (incluindo o cron de lembrete/expiração de aprovações) e um
+**pool de goroutines interno** que consome a fila `mail.send`; não existe
+ainda um processo worker externo ao servidor. A separação real em worker
+nodes (identidade e segredos próprios, sem acesso direto ao PostgreSQL,
+comunicação por AMQP TLS 5671) permanece como arquitetura-alvo — RabbitMQ
+hoje já está no caminho crítico de entrega de e-mail (campanha, aprovação
+**e** atribuição de treinamento), mas isso não deve ser confundido com
 workers distribuídos.
 
-O portal do cliente aprovador (`/approvals/*`) é servido pelo mesmo processo
-e pela mesma porta pública (9443) da web de campanhas — não abre porta nova
-— mas com sessão, cookie e proteção CSRF completamente separados do restante
-do tráfego dessa porta (que, por natureza, não tem CSRF, já que recebe POSTs
-cross-origin legítimos de formulários de captura de credenciais simuladas).
+Todas as três áreas do cliente (`/approvals/*`, `/portal/*` e
+`/training/{token}`) são servidas pelo mesmo processo e pela mesma porta
+pública (9443) da web de campanhas — não abrem porta nova. `/approvals/*` e
+`/portal/*` compartilham sessão/cookie (`ethphish_client`) com proteção
+CSRF própria; `/training/{token}` não tem sessão — o token na URL identifica
+o acesso diretamente, o mesmo modelo de confiança do `rid` de campanha, já
+que o treinamento é revisitado várias vezes (não é uma decisão única como
+uma aprovação). Nenhuma dessas três áreas tem CSRF compartilhado com o
+restante da porta 9443, que por natureza não tem proteção CSRF (recebe
+POSTs cross-origin legítimos de formulários de captura de credenciais
+simuladas).
 
 Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architecture.md).
 
@@ -179,8 +217,8 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
 
 | Componente | Papel | Portas | Exposição |
 | --- | --- | --- | --- |
-| `reverse-proxy` (Caddy) | TLS público e roteamento web + admin + portal do cliente | 9443/TCP web (campanhas + portal `/approvals/*`), 9444/TCP admin, publicadas no host | somente para redes autorizadas (VPN/Zero Trust); nunca publicar 9444 na internet aberta; 9443 pode ser exposta ao público-alvo autorizado de uma campanha e aos aprovadores de contrato |
-| `server` | administração, API, campanhas, portal do cliente aprovador, worker interno de e-mail | 3333/TCP admin, 8080/TCP web (inclui `/approvals/*`) | somente redes Docker internas (`admin_internal`, `application_internal`) |
+| `reverse-proxy` (Caddy) | TLS público e roteamento web + admin + portal/treinamento do cliente | 9443/TCP web (campanhas + `/approvals/*` + `/portal/*` + `/training/*`), 9444/TCP admin, publicadas no host | somente para redes autorizadas (VPN/Zero Trust); nunca publicar 9444 na internet aberta; 9443 pode ser exposta ao público-alvo autorizado de uma campanha, aos aprovadores de contrato e a quem recebeu treinamento |
+| `server` | administração, API, campanhas, portal/aprovação/treinamento do cliente, worker interno de e-mail | 3333/TCP admin, 8080/TCP web (inclui `/approvals/*`, `/portal/*`, `/training/*`) | somente redes Docker internas (`admin_internal`, `application_internal`) |
 | `db-migrate` | aplica migrations com role privilegiado, roda uma vez e termina | nenhuma publicada | rede de dados interna, sem rede externa |
 | `postgres` | dados, RLS e migrations | 5432/TCP | rede de dados interna (`data_internal`) |
 | `rabbitmq` | fila durável de e-mail em produção | 5672/TCP AMQP, 5671/TCP AMQP TLS (worker nodes futuros) | rede de dados interna |
@@ -206,7 +244,7 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
   CPU e memória por node devem ser monitorados para decidir quando adicionar
   o próximo node.
 
-## Recursos implementados até a v0.4.0
+## Recursos implementados até a v0.5.0
 
 **Herdados do baseline Anglerphish 1.3.0** (ver detalhamento completo em
 [FEATURES.md](FEATURES.md)):
@@ -274,6 +312,32 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
 - **identidade visual EthPhish**: logos e temas claro/escuro próprios;
 - correção de segurança: criação de usuário exige `tenant_id` explícito.
 
+**Entregues na v0.5.0 (EthPhish)**:
+
+- **portal do cliente completo** (`/portal/*`): dashboard com todas as
+  campanhas do tenant e indicadores agregados (enviados/abertos/clicados/
+  submetidos/reportados) — nunca dado nomeado por alvo; detalhe por
+  campanha; exportação CSV; login self-service por e-mail (token de uso
+  único, 15 min), sem depender de uma aprovação pendente para entrar;
+  sessão compartilhada com o portal de aprovação;
+- **treinamento e quiz**: treinamentos com lições HTML sequenciais e quiz
+  opcional (perguntas de múltipla escolha e verdadeiro/falso misturadas
+  livremente), nota mínima e limite de tentativas configuráveis por
+  treinamento;
+- **atribuição direta**: tela admin "Trainings" atribui um treinamento a
+  um grupo inteiro, gera um link único por alvo e dispara e-mail
+  automático (mesmo mecanismo de SMTP por tenant já usado em aprovações);
+- **teachable moment**: campanha ganha campo opcional de treinamento e
+  gatilho (clique, submissão, ou ambos) no wizard de criação — quem
+  cai na simulação é redirecionado automaticamente para o treinamento
+  configurado, sem etapa manual; o clique/submit da campanha continua
+  sendo rastreado normalmente antes do redirecionamento;
+- correção de um deadlock latente pré-existente (não introduzido nesta
+  sprint, só exposto por ela): `getCampaignStats` usava a conexão global
+  do banco em vez da transação ativa, travando sob pool de conexão
+  limitado — afetava também `GetCampaignSummariesForTenant`, já em
+  produção desde a v0.4.0.
+
 ## Funções e recursos futuros
 
 - workers externos ao processo do servidor, distribuídos em nodes próprios,
@@ -294,6 +358,17 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
   fluxo atual de magic link emitido pelo admin;
 - dashboard operacional e executivo, métricas de capacidade e
   observabilidade (backlog, DLQ, latência, node saúde);
+- certificado de conclusão de treinamento (PDF ou equivalente) — fora de
+  escopo da v0.5.0 por decisão de corte, ver
+  [Issues conhecidos](ISSUES_CONHECIDOS.md);
+- dashboard de indicadores de treinamento (taxa de início/conclusão, nota
+  média, evolução entre tentativas, departamentos com menor adesão,
+  reincidência pós-treinamento, impacto nas campanhas seguintes — Sprint08
+  §14.4); os dados brutos já são gravados (`training_assignments`,
+  `quiz_attempts`), falta a camada de agregação e visualização;
+- treinamento exposto no portal do cliente (`/portal/*` já reserva o
+  conceito, mas a listagem de treinamentos do cliente ainda não existe);
+- conteúdo de vídeo/SCORM em lições de treinamento;
 - bundles versionados de campanhas e conteúdos de treinamento, com
   importação/exportação controlada;
 - backup automatizado, retenção, restauração recorrente e storage externo;
@@ -403,8 +478,12 @@ Consulte [desenvolvimento local](docs/runbooks/local-development.md),
 - [Sprint 05 — escopo planejado](INFO/Sprint05.md) /
   [Sprint 06 — escopo planejado](INFO/Sprint06.md)
 - [Validação manual Sprint 05/06 — evidências e correções](INFO/Validacao-S05-S06/RELATORIO.md)
+- [Sprint 07 — escopo planejado](INFO/Sprint07.md) /
+  [Sprint 08 — escopo planejado](INFO/Sprint08.md)
+- [Design: portal do cliente](docs/superpowers/specs/2026-08-06-client-portal-dashboard-design.md)
+- [Design: treinamento e quiz](docs/superpowers/specs/2026-08-06-training-quiz-design.md)
 - [Funções e recursos herdados detalhados](FEATURES.md)
-- [Release notes v0.4.0](RELEASE_NOTES.md)
+- [Release notes v0.5.0](RELEASE_NOTES.md)
 - [Issues conhecidos](ISSUES_CONHECIDOS.md)
 
 ## Licença e atribuição

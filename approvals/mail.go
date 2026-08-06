@@ -18,6 +18,11 @@ import (
 // it establishes) stays valid before requiring a resend.
 const MagicLinkTTL = 7 * 24 * time.Hour
 
+// PortalLoginTokenTTL is how long a self-service client-portal login link
+// stays valid. Short-lived by design — it's a login link, not an
+// approval window, so it doesn't need to survive days like MagicLinkTTL.
+const PortalLoginTokenTTL = 15 * time.Minute
+
 // approvalMail is a one-off transactional email, following the same
 // mailer.Mail contract as models.MailLog (see models/maillog.go) but for
 // plain admin-to-client notices rather than phishing simulation content.
@@ -82,6 +87,19 @@ func send(tenantID, uid int64, to, subject, body string) error {
 	return mailer.SendOne(context.Background(), m)
 }
 
+// sendSystem is send's equivalent for e-mail with no acting admin user —
+// the client portal's self-service login is triggered by the client, not
+// by an admin action, so there's no uid to resolve an owned SMTP profile
+// with; it uses whichever sending profile the tenant has configured.
+func sendSystem(tenantID int64, to, subject, body string) error {
+	smtp, err := models.GetAnySMTPForTenant(tenantID)
+	if err != nil {
+		return fmt.Errorf("no sending profile configured for this tenant")
+	}
+	m := &approvalMail{smtp: smtp, to: to, subject: subject, body: body}
+	return mailer.SendOne(context.Background(), m)
+}
+
 // SendApprovalRequestEmail notifies a contract approver that a version is
 // awaiting their decision, with a link to the client approval portal that
 // logs them in via the embedded magic-link token.
@@ -103,6 +121,31 @@ func SendReminderEmail(tenantID, uid int64, approverEmail, approverName, contrac
 		approverName, contractName, portalURL,
 	)
 	return send(tenantID, uid, approverEmail, subject, body)
+}
+
+// SendPortalLoginEmail delivers a self-service client-portal login link.
+// Unlike the approval e-mails above, this isn't triggered by an admin
+// action — a client requested it themselves from the portal's login form.
+func SendPortalLoginEmail(tenantID int64, to, name, portalURL string) error {
+	subject := "Your EthPhish client portal login link"
+	body := fmt.Sprintf(
+		"Hello %s,\n\nUse this link to sign in to the client portal:\n%s\n\nThis link expires shortly and can only be used once. If you didn't request it, you can ignore this e-mail.\n\n-- EthPhish",
+		name, portalURL,
+	)
+	return sendSystem(tenantID, to, subject, body)
+}
+
+// SendTrainingAssignmentEmail notifies a target they've been assigned an
+// awareness training, with their unique access link. Admin-triggered
+// (via the "Assign to Group" action), so it uses send (uid-scoped SMTP
+// profile), not sendSystem.
+func SendTrainingAssignmentEmail(tenantID, uid int64, to, name, trainingName, link string) error {
+	subject := fmt.Sprintf("Training assigned: %q", trainingName)
+	body := fmt.Sprintf(
+		"Hello %s,\n\nYou've been assigned the training %q.\n\nStart here:\n%s\n\n-- EthPhish",
+		name, trainingName, link,
+	)
+	return send(tenantID, uid, to, subject, body)
 }
 
 // SendDecisionNotificationEmail tells the admin who requested an approval

@@ -1,27 +1,27 @@
-# Issues conhecidos — EthPhish v0.4.0
+# Issues conhecidos — EthPhish v0.5.0
 
 ## Limitações técnicas
 
 | Item | Impacto | Mitigação/planejamento |
 | --- | --- | --- |
-| **Conta de emergência não implementada** | O escopo do Sprint 5 previa uma conta de emergência (break-glass) para acesso administrativo caso o IdP OIDC fique indisponível; não existe no código nem foi encontrada em nenhum commit — apenas o login local do usuário `admin` cobre esse caso hoje, sem processo formal de custódia/rotação | definir escopo (quem, como é provisionada, como fica fora do fluxo OIDC/RBAC normal) e implementar em release futura |
-| **Entrega de e-mail de aprovação depende de perfil SMTP configurado no tenant** | Sem um perfil SMTP, "Request Approval"/"Resend" criam o registro no banco mas ninguém é notificado; a UI agora reporta `approvers_notified`/`approvers_total` (corrigido nesta release), mas ainda não há um alerta proativo na tela de Contratos quando o tenant não tem SMTP configurado | adicionar aviso preventivo na criação do contrato/aprovador se o tenant não tiver perfil SMTP |
-| **Auditoria de login do portal do cliente não confirmada** | Tentativas de login (sucesso/falha) do portal `/approvals/login` não foram localizadas em log estruturado dedicado durante a validação manual — diferente do login administrativo, que aparece no log do `server` | revisar `controllers/approval_portal.go` e acrescentar log estruturado de tentativa/sucesso/falha, sem registrar o token em texto claro |
-| **Workers ainda são internos ao servidor** (herdado da v0.3.0) | RabbitMQ está no caminho crítico de e-mail, mas o consumidor é um pool de goroutines no processo `server`; não há escala independente nem isolamento por node | extrair worker node externo, AMQP TLS 5671, sem acesso a banco/painel |
-| **SMS e relatórios não usam a fila durável** (herdado da v0.3.0) | permanecem no polling de banco já existente; não têm o retry/DLQ que o e-mail (de campanha e de aprovação) já tem | estender o padrão `mail.send` para SMS e geração de relatórios |
-| **Sem transactional outbox** (herdado da v0.3.0) | a publicação na fila não é atômica com o commit do `MailLog`; uma falha entre os dois pode duplicar ou perder a publicação | implementar outbox transacional antes de tratar o e-mail como exactly-once |
-| **Portal do cliente ainda não é onboarding self-service completo** | o cliente só entra via magic link emitido pelo admin a partir de um aprovador já cadastrado no contrato; não há cadastro próprio, recuperação de acesso alternativa ou gestão de múltiplos contratos numa única sessão além dos que a sessão do aprovador já autoriza | portal de clientes com onboarding próprio em release futura |
-| **RLS depende de disciplina de configuração** (herdado da v0.3.0) | qualquer DSN de runtime apontando para o role privilegiado `ethphish` (em vez de `ethphish_app`) desativa a proteção de RLS silenciosamente | validar a DSN de runtime em cada deploy; considerar um check de partida que rejeite conexão como role privilegiado |
-| **`ETHPHISH_PHISH_CSRF_KEY` sem valor fixo em produção** | se não definida, uma chave é gerada por processo — um restart do `server` invalida qualquer formulário de decisão de aprovação que o cliente tenha aberto (a sessão de login continua válida, só o POST de decisão falha por CSRF) | definir a variável com um valor fixo e gerenciado (secret) antes de publicar o portal externamente |
-| **Import XLSX no cliente sem limite de tamanho aplicado no frontend** | a importação de grupos via XLSX roda inteiramente no navegador (SheetJS); arquivos muito grandes podem travar a aba antes de a validação/preview rodar | validar tamanho do arquivo antes do parse; considerar mover para o backend se o volume justificar |
-| **Admin UI publicada em porta própria (9444)** (herdado da v0.3.0) | reduz risco de path-based leakage, mas ainda é publicada no host pelo Compose de desenvolvimento | em produção, restringir 9444 (e agora também 9443, que passou a servir o portal do cliente) a redes autorizadas via firewall/security group/VPN |
-| **Reconciliação ampliada de importação** (herdado da v0.3.0) | o importador aprovado compara contagens e preservação de IDs; hash de conteúdo, órfãos e equivalência de timestamps ainda não são gate automático | concluir antes de importar dados reais |
-| **SQLite em ferramenta/testes legados** (herdado da v0.3.0) | o runtime e a imagem não incluem SQLite; o driver permanece somente no importador e na caracterização | remover após aposentadoria das bases legadas |
-| **GORM v1 e frontend legado** (herdado da v0.3.0) | dependências com manutenção limitada | modernização incremental após estabilização funcional |
-| **Certificados autoassinados** (herdado da v0.3.0) | adequados apenas para desenvolvimento | usar CA corporativa ou certificados públicos gerenciados em produção |
-| **Origens confiáveis customizadas no CSRF** (herdado da v0.3.0) | não são suportadas nesta release por vulnerabilidade sem correção do componente upstream | usar um único origin administrativo HTTPS; reavaliar após correção upstream |
+| **Sem certificado de conclusão de treinamento** | assignments/quiz_attempts gravam nota e aprovação, mas não há PDF/documento emitido ao concluir | gerar certificado (reaproveitar o gerador de relatórios Word/Excel já existente) em release futura |
+| **Sem dashboard de indicadores de treinamento** | taxa de início/conclusão, nota média, evolução entre tentativas, departamentos com menor adesão, reincidência pós-treinamento e impacto nas campanhas seguintes (Sprint08 §14.4) não têm tela — os dados brutos já existem em `training_assignments`/`quiz_attempts`/`training_lesson_views` | construir a camada de agregação e visualização em cima do que já é gravado |
+| **Treinamento não aparece no portal do cliente** | `/portal/*` (Sprint 7.5) reserva o conceito na navegação mas não lista treinamentos do tenant nem progresso agregado | wiring simples, dado já existe; adiar foi decisão de escopo, não limitação técnica |
+| **E-mail de atribuição de treinamento depende de perfil SMTP configurado no tenant** | sem perfil SMTP, a atribuição é criada no banco (link válido) mas ninguém recebe o e-mail; mesma limitação já documentada para aprovações na v0.4.0 | mesmo aviso preventivo pendente de implementar na tela de Contratos vale aqui |
+| **Login self-service do portal depende de já existir um `ContractApprover` cadastrado** | não há cadastro próprio de cliente; o portal só reconhece quem já foi nomeado aprovador em algum contrato pelo admin | portal self-service completo (onboarding próprio) é item de release futura, já listado desde a v0.4.0 |
+| **Sem conteúdo de vídeo/SCORM em treinamento** | lições são só HTML estático | avaliar necessidade real antes de acrescentar suporte a mídia rica |
+| **Conta de emergência não implementada** (herdado da v0.4.0) | escopo do Sprint 5 previa break-glass administrativo se o IdP OIDC cair; ainda não existe, só o login local do `admin` cobre esse caso | definir escopo e implementar |
+| **Auditoria de login do portal do cliente não confirmada** (herdado da v0.4.0) | tentativas de login em `/approvals/*`/`/portal/*` não têm log estruturado dedicado | revisar e acrescentar, sem logar token em texto claro |
+| **Workers ainda são internos ao servidor** (herdado da v0.3.0) | RabbitMQ está no caminho crítico de e-mail (campanha, aprovação, treinamento), mas o consumidor é um pool de goroutines no processo `server` | extrair worker node externo, AMQP TLS 5671, sem acesso a banco/painel |
+| **SMS e relatórios não usam a fila durável** (herdado da v0.3.0) | permanecem no polling de banco já existente | estender o padrão `mail.send` |
+| **Sem transactional outbox** (herdado da v0.3.0) | publicação na fila não é atômica com o commit do registro correspondente | implementar outbox transacional |
+| **`ETHPHISH_PHISH_CSRF_KEY` sem valor fixo em produção** (herdado da v0.4.0) | sem ela, um restart do `server` invalida formulários de decisão de aprovação e de quiz em andamento | definir a variável com um valor fixo e gerenciado antes de publicar externamente |
+| **RLS não cobre as tabelas de contrato/aprovação/portal/treinamento** | as tabelas do Sprint 5–7 (`contracts`, `client_users`, `portal_login_tokens`, `trainings`, `training_assignments` etc.) usam `tenant_id` + escopo em nível de aplicação (`withTenantTransaction`), mas não têm a policy PostgreSQL RLS aplicada na migration original — mesmo padrão desde a v0.4.0, não é regressão desta release, mas segue sem cobertura de RLS | avaliar estender a policy `tenant_isolation` pra essas tabelas |
+| **Admin UI publicada em porta própria (9444)** (herdado da v0.3.0) | 9443 agora carrega também portal e treinamento do cliente | restringir ambas as portas conforme o caso de uso em produção |
+| **Certificados autoassinados** (herdado da v0.3.0) | adequados só para desenvolvimento | usar CA corporativa ou certificados públicos gerenciados em produção |
+| **Origens confiáveis customizadas no CSRF** (herdado da v0.3.0) | não suportadas nesta release por vulnerabilidade sem correção do componente upstream | usar um único origin administrativo HTTPS |
 | **Restore automatizado não existe** (herdado da v0.3.0) | recuperação requer runbook e operador autorizado | automatizar retenção, restore periódico e evidência de teste |
-| **Dependências legadas fora do escopo do scanner** (herdado da v0.3.0) | componentes herdados como GORM v1 exigem acompanhamento contínuo | CI bloqueia CVEs HIGH/CRITICAL corrigíveis em cada alteração de imagem |
+| **Dependências legadas fora do escopo do scanner** (herdado da v0.3.0) | GORM v1 e afins exigem acompanhamento contínuo | CI bloqueia CVEs HIGH/CRITICAL corrigíveis em cada alteração de imagem |
 
 ## Restrições de segurança e produto
 
@@ -29,20 +29,18 @@
 - Não registrar credenciais reais; a adequação completa dos fluxos legados será
   verificada antes de piloto.
 - Não expor o painel administrativo (porta 9444) na internet; a porta 9443
-  agora também carrega o portal do cliente aprovador — restringir ambas à
-  rede administrativa/VPN ou a uma lista de origens autorizadas conforme o
-  caso de uso.
+  carrega o portal de aprovação, o portal completo do cliente e a entrega
+  de treinamento — restringir conforme o público real de cada campanha.
 - Não habilitar ignorar erros de certificado SMTP/IMAP fora de teste autorizado.
 - Não tratar o workflow de contrato/aprovação como substituto de um processo
-  jurídico formal de contratação — ele é evidência operacional de que um
-  responsável nomeado aprovou um escopo específico, não um instrumento
-  contratual em si.
+  jurídico formal de contratação.
 - Não conectar o runtime do `server` com o role privilegiado de migrations
-  (`ethphish`); use sempre o role restrito (`ethphish_app`) para preservar o
-  isolamento por RLS.
-- Não publicar o portal do cliente sem `ETHPHISH_PHISH_CSRF_KEY` fixa e sem
-  ao menos um perfil SMTP por tenant — sem isso, a experiência de aprovação
-  fica quebrada mesmo com o backend funcionando corretamente.
+  (`ethphish`); use sempre o role restrito (`ethphish_app`).
+- Não publicar o portal do cliente ou a entrega de treinamento sem
+  `ETHPHISH_PHISH_CSRF_KEY` fixa e sem ao menos um perfil SMTP por tenant.
+- Não tratar a nota/aprovação de quiz como avaliação de desempenho
+  individual formal sem revisão jurídica/RH prévia — é evidência de
+  conscientização, não instrumento disciplinar por padrão do produto.
 
 ## Suporte
 

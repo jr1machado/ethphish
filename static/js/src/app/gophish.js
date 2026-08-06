@@ -214,6 +214,42 @@ var api = {
             return query("/approvals/" + id + "/comments", "POST", { body: body }, false)
         }
     },
+    // trainings contains the endpoints for /trainings
+    trainings: {
+        get: function () {
+            return query("/trainings/", "GET", {}, false)
+        },
+        post: function (training) {
+            return query("/trainings/", "POST", training, false)
+        }
+    },
+    // trainingId contains the endpoints for /trainings/:id
+    trainingId: {
+        get: function (id) {
+            return query("/trainings/" + id, "GET", {}, false)
+        },
+        put: function (training) {
+            return query("/trainings/" + training.id, "PUT", training, false)
+        },
+        delete: function (id) {
+            return query("/trainings/" + id, "DELETE", {}, false)
+        },
+        addLesson: function (id, lesson) {
+            return query("/trainings/" + id + "/lessons", "POST", lesson, false)
+        },
+        deleteLesson: function (id, lessonId) {
+            return query("/trainings/" + id + "/lessons/" + lessonId, "DELETE", {}, false)
+        },
+        saveQuiz: function (id, quiz) {
+            return query("/trainings/" + id + "/quiz", "POST", quiz, false)
+        },
+        addQuestion: function (id, question) {
+            return query("/trainings/" + id + "/quiz/questions", "POST", question, false)
+        },
+        assign: function (id, groupId) {
+            return query("/trainings/" + id + "/assign", "POST", { group_id: groupId }, false)
+        }
+    },
     // templates contains the endpoints for /templates
     templates: {
         // get() - Queries the API for GET /templates

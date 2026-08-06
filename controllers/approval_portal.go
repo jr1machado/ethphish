@@ -48,19 +48,44 @@ func (ps *PhishingServer) registerApprovalPortalRoutes(router *mux.Router) {
 }
 
 func requireClientSession(handler func(http.ResponseWriter, *http.Request, models.ClientSession)) http.HandlerFunc {
+	return requireClientSessionRedirectingTo("/approvals/login", handler)
+}
+
+// requireClientSessionRedirectingTo is the shared guard behind both
+// requireClientSession (/approvals/*) and requirePortalSession
+// (/portal/*) — same cookie, same session store, different login page to
+// bounce back to so a client landing on either area unauthenticated ends
+// up on that area's own entry point.
+func requireClientSessionRedirectingTo(loginPath string, handler func(http.ResponseWriter, *http.Request, models.ClientSession)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(clientSessionCookieName)
 		if err != nil {
-			http.Redirect(w, r, "/approvals/login", http.StatusFound)
+			http.Redirect(w, r, loginPath, http.StatusFound)
 			return
 		}
 		cs, err := models.GetClientSessionByToken(cookie.Value)
 		if err != nil {
-			http.Redirect(w, r, "/approvals/login", http.StatusFound)
+			http.Redirect(w, r, loginPath, http.StatusFound)
 			return
 		}
 		handler(w, r, cs)
 	}
+}
+
+// setClientSessionCookie issues the shared client-portal session cookie.
+// Path is "/" — not "/approvals" — because the same session now backs both
+// the approval-decision area and the broader client portal (/portal/*);
+// scoping it to one path would make it invisible on the other.
+func setClientSessionCookie(w http.ResponseWriter, ps *PhishingServer, sessionToken string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     clientSessionCookieName,
+		Value:    sessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   ps.config.UseTLS,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now().UTC().Add(clientSessionTTL),
+	})
 }
 
 func approvalPortalTemplate(name string) *template.Template {
@@ -102,15 +127,7 @@ func (ps *PhishingServer) ApprovalLogin(w http.ResponseWriter, r *http.Request) 
 		renderClientLogin(w, "Something went wrong. Please try again later.")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     clientSessionCookieName,
-		Value:    sessionToken,
-		Path:     "/approvals",
-		HttpOnly: true,
-		Secure:   ps.config.UseTLS,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().UTC().Add(clientSessionTTL),
-	})
+	setClientSessionCookie(w, ps, sessionToken)
 	http.Redirect(w, r, fmt.Sprintf("/approvals/%d", ar.Id), http.StatusFound)
 }
 
@@ -241,11 +258,17 @@ func (ps *PhishingServer) ApprovalDecision(w http.ResponseWriter, r *http.Reques
 
 // ApprovalLogout destroys the client-portal session.
 func (ps *PhishingServer) ApprovalLogout(w http.ResponseWriter, r *http.Request, cs models.ClientSession) {
+	clearClientSession(w, r)
+	http.Redirect(w, r, "/approvals/login", http.StatusFound)
+}
+
+// clearClientSession destroys the session record and its cookie, shared
+// by both the approval and portal logout handlers.
+func clearClientSession(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(clientSessionCookieName); err == nil {
 		models.DeleteClientSession(cookie.Value)
 	}
-	http.SetCookie(w, &http.Cookie{Name: clientSessionCookieName, Value: "", Path: "/approvals", MaxAge: -1})
-	http.Redirect(w, r, "/approvals/login", http.StatusFound)
+	http.SetCookie(w, &http.Cookie{Name: clientSessionCookieName, Value: "", Path: "/", MaxAge: -1})
 }
 
 func atoi64(s string) int64 {

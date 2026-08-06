@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Portal - EthPhish</title>
+    <style>
+        body { font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; background: #f4f6f8; color: #1c222b; margin: 0; }
+        .wrap { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
+        .hero { background: linear-gradient(135deg, #1e3a5f 0%, #17998a 100%); border-radius: 10px; padding: 25px 30px; color: #fff; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .hero h1 { margin: 0 0 6px 0; font-size: 24px; }
+        .hero .links a { color: #fff; margin-left: 16px; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+        th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #e2e5e9; }
+        th { background: #f4f6f8; font-size: 13px; text-transform: uppercase; color: #5b6470; }
+        a.btn { display: inline-block; padding: 6px 14px; background: #1e3a5f; color: #fff; border-radius: 4px; text-decoration: none; }
+        .empty { color: #5b6470; text-align: center; padding: 40px 0; }
+        .stat { font-size: 12px; color: #5b6470; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="hero">
+            <div>
+                <h1>Campaign Portal</h1>
+                <p>Aggregate indicators for every campaign in your program.</p>
+            </div>
+            <div class="links">
+                <a href="/approvals">Approvals</a>
+                <a href="/portal/reports">Export CSV</a>
+                <form method="POST" action="/portal/logout" style="display:inline;">
+                    <input type="hidden" name="gorilla.csrf.Token" value="{{.Token}}">
+                    <button type="submit" style="background:none;border:none;color:#fff;text-decoration:underline;cursor:pointer;">Sign out</button>
+                </form>
+            </div>
+        </div>
+        {{if .Summaries.Campaigns}}
+        <table>
+            <thead>
+                <tr><th>Campaign</th><th>Type</th><th>Status</th><th>Sent</th><th>Opened</th><th>Clicked</th><th>Submitted</th><th>Reported</th><th></th></tr>
+            </thead>
+            <tbody>
+                {{range .Summaries.Campaigns}}
+                <tr>
+                    <td>{{.Name}}</td>
+                    <td>{{.Type}}</td>
+                    <td>{{.Status}}</td>
+                    <td>{{.Stats.EmailsSent}}</td>
+                    <td>{{.Stats.OpenedEmail}}</td>
+                    <td>{{.Stats.ClickedLink}}</td>
+                    <td>{{.Stats.SubmittedData}}</td>
+                    <td>{{.Stats.EmailReported}}</td>
+                    <td><a class="btn" href="/portal/campaigns/{{.Id}}">Details</a></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty">No campaigns yet for your program.</div>
+        {{end}}
+    </div>
+</body>
+
+</html>
