@@ -38,7 +38,8 @@ vendorjs = function () {
             vendor_directory + 'select2.min.js',
             vendor_directory + 'core.min.js',
             vendor_directory + 'highcharts.js',
-            vendor_directory + 'ua-parser.min.js'
+            vendor_directory + 'ua-parser.min.js',
+            vendor_directory + 'xlsx.full.min.js'
         ])
         .pipe(concat('vendor.js'))
         .pipe(rename({
