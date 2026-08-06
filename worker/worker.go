@@ -117,6 +117,15 @@ func (w *DefaultWorker) processCampaigns(t time.Time) error {
 	for cid, msc := range msg {
 		go func(cid int64, msc []*models.MailLog) {
 			c := campaignCache[cid]
+			if ok, err := models.IsCampaignApproved(c.ContractID); err != nil {
+				log.Error(err)
+				return
+			} else if !ok {
+				log.WithFields(logrus.Fields{
+					"campaign_id": cid,
+				}).Warn("Skipping send: campaign's contract approval is missing or stale")
+				return
+			}
 			if c.Status == models.CampaignQueued {
 				err := c.UpdateStatus(models.CampaignInProgress)
 				if err != nil {
@@ -256,6 +265,15 @@ func (w *DefaultWorker) processSMSCampaigns(t time.Time) error {
 	for cid, ssc := range msg {
 		go func(cid int64, ssc []mailer.SMSMail) {
 			c := campaignCache[cid]
+			if ok, err := models.IsCampaignApproved(c.ContractID); err != nil {
+				log.Error(err)
+				return
+			} else if !ok {
+				log.WithFields(logrus.Fields{
+					"campaign_id": cid,
+				}).Warn("Skipping send: campaign's contract approval is missing or stale")
+				return
+			}
 			if c.Status == models.CampaignQueued {
 				err := c.UpdateStatus(models.CampaignInProgress)
 				if err != nil {

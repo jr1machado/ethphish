@@ -883,7 +883,7 @@ func (as *Server) GenerateCampaignSetReport(w http.ResponseWriter, r *http.Reque
 		}
 
 		// Set appropriate headers for file download
-		filename := "anglerphish_campaign_set_report"
+		filename := "ethphish_campaign_set_report"
 		extension := ".docx"
 		downloadContentType := "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 

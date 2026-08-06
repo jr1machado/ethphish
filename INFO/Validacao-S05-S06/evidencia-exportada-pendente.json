@@ -1,0 +1,36 @@
+{
+  "approval_request": {
+    "id": 1,
+    "contract_version_id": 1,
+    "status": "pending",
+    "token_expires_at": "2026-08-13T17:47:45.537427Z",
+    "requested_at": "2026-08-06T17:47:45.537427Z",
+    "comments": [
+      {
+        "id": 1,
+        "approval_request_id": 1,
+        "author_type": "admin",
+        "author_id": 1,
+        "body": "Comentario de teste do lado admin.",
+        "created_at": "2026-08-06T17:48:07.224735Z"
+      }
+    ]
+  },
+  "contract_version": {
+    "id": 1,
+    "contract_id": 1,
+    "version_number": 1,
+    "file_name": "msa.pdf",
+    "scope_description": "Escopo Fase 1 - validacao Sprint06",
+    "uploaded_at": "2026-08-06T17:44:54.615159Z",
+    "notes": ""
+  },
+  "contract": {
+    "id": 1,
+    "name": "MSA Validacao Sprint06",
+    "client_name": "Cliente QA Ltda",
+    "status": "active",
+    "created_at": "2026-08-06T17:44:52.844229Z",
+    "updated_at": "2026-08-06T17:44:52.844229Z"
+  }
+}

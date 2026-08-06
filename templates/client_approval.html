@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Contract.Name}} - EthPhish Approval</title>
+    <style>
+        body { font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; background: #f4f6f8; color: #1c222b; margin: 0; }
+        .wrap { max-width: 720px; margin: 40px auto; padding: 0 20px; }
+        .hero { background: linear-gradient(135deg, #1e3a5f 0%, #17998a 100%); border-radius: 10px; padding: 25px 30px; color: #fff; margin-bottom: 25px; }
+        .hero h1 { margin: 0 0 6px 0; font-size: 24px; }
+        .card { background: #fff; border-radius: 6px; padding: 20px 25px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+        .scope { white-space: pre-wrap; line-height: 1.5; }
+        .comment { border-bottom: 1px solid #e2e5e9; padding: 8px 0; }
+        textarea { width: 100%; padding: 10px; border: 1px solid #e2e5e9; border-radius: 4px; font-family: inherit; }
+        .actions { margin-top: 15px; }
+        button { padding: 10px 20px; border: none; border-radius: 4px; color: #fff; font-weight: 700; cursor: pointer; margin-right: 8px; }
+        .approve { background: #2e7d32; }
+        .reject { background: #c62828; }
+        .changes { background: #f0ad4e; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; color: #fff; background: #f0ad4e; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="hero">
+            <h1>{{.Contract.Name}}</h1>
+            <p>Client: {{.Contract.ClientName}} &middot; Version #{{.Version.VersionNumber}} &middot; Status: <span class="badge">{{.ApprovalRequest.Status}}</span></p>
+        </div>
+
+        <div class="card">
+            <h3>Scope of this version</h3>
+            <div class="scope">{{.Version.ScopeDescription}}</div>
+            {{if .Version.Notes}}<p><em>{{.Version.Notes}}</em></p>{{end}}
+            <p>Document on file: {{.Version.FileName}}</p>
+        </div>
+
+        <div class="card">
+            <h3>Comments</h3>
+            {{if .ApprovalRequest.Comments}}
+                {{range .ApprovalRequest.Comments}}
+                <div class="comment"><strong>{{.AuthorType}}</strong> &mdash; {{.Body}}</div>
+                {{end}}
+            {{else}}
+                <p>No comments yet.</p>
+            {{end}}
+        </div>
+
+        {{if eq .ApprovalRequest.Status "pending"}}
+        <div class="card">
+            <h3>Your decision</h3>
+            <form method="POST" action="/approvals/{{.ApprovalRequest.Id}}/decision">
+                <input type="hidden" name="gorilla.csrf.Token" value="{{.Token}}">
+                <textarea name="comment" rows="3" placeholder="Optional comment"></textarea>
+                <div class="actions">
+                    <button type="submit" name="action" value="approve" class="approve">Approve</button>
+                    <button type="submit" name="action" value="changes" class="changes">Request Changes</button>
+                    <button type="submit" name="action" value="reject" class="reject">Reject</button>
+                </div>
+            </form>
+        </div>
+        {{end}}
+    </div>
+</body>
+
+</html>

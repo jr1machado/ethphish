@@ -28,6 +28,12 @@ type PhishServer struct {
 	UseTLS    bool   `json:"use_tls"`
 	CertPath  string `json:"cert_path"`
 	KeyPath   string `json:"key_path"`
+	// CSRFKey protects the client approval portal's CSRF cookie (see
+	// controllers/approval_portal.go). Left empty, a random key is
+	// generated per process start, same fallback AdminServer.CSRFKey uses —
+	// but that invalidates in-flight approval forms across a restart or a
+	// multi-instance deployment, so set this in production.
+	CSRFKey string `json:"csrf_key"`
 }
 
 // Reports represents the reports configuration details
@@ -65,6 +71,11 @@ type Config struct {
 	ReportsConf    Reports       `json:"reports"`
 	OIDC           OIDC          `json:"oidc"`
 	RabbitMQURL    string        `json:"rabbitmq_url"`
+	// ApprovalPortalBaseURL is the public base URL (e.g.
+	// "https://phish.example.com") clients use to reach the approval
+	// portal mounted on the phishing server. Approval e-mails link to
+	// ApprovalPortalBaseURL + "/approvals/login?token=...".
+	ApprovalPortalBaseURL string `json:"approval_portal_base_url"`
 }
 
 // Version contains the current gophish version
@@ -157,12 +168,14 @@ func applyEnvironment(config *Config) error {
 	setString("ETHPHISH_PHISH_LISTEN_URL", &config.PhishConf.ListenURL)
 	setString("ETHPHISH_PHISH_CERT_PATH", &config.PhishConf.CertPath)
 	setString("ETHPHISH_PHISH_KEY_PATH", &config.PhishConf.KeyPath)
+	setString("ETHPHISH_PHISH_CSRF_KEY", &config.PhishConf.CSRFKey)
 	setString("ETHPHISH_DB_DRIVER", &config.DBName)
 	setString("ETHPHISH_DB_DSN", &config.DBPath)
 	setString("ETHPHISH_DB_SSL_CA_PATH", &config.DBSSLCaPath)
 	setString("ETHPHISH_CONTACT_ADDRESS", &config.ContactAddress)
 	setString("ETHPHISH_REPORTS_STORAGE_PATH", &config.ReportsConf.StoragePath)
 	setString("ETHPHISH_RABBITMQ_URL", &config.RabbitMQURL)
+	setString("ETHPHISH_APPROVAL_PORTAL_BASE_URL", &config.ApprovalPortalBaseURL)
 	setString("ETHPHISH_OIDC_ISSUER", &config.OIDC.Issuer)
 	setString("ETHPHISH_OIDC_CLIENT_ID", &config.OIDC.ClientID)
 	setString("ETHPHISH_OIDC_REDIRECT_URL", &config.OIDC.RedirectURL)

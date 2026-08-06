@@ -1,0 +1,93 @@
+{{define "body"}}
+<div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
+    <div class="row">
+        <h1 class="page-header">Contracts</h1>
+    </div>
+    <div id="flashes" class="row"></div>
+    <div class="row">
+        <button type="button" class="btn btn-primary" onclick="newContract()" data-toggle="modal" data-backdrop="static" data-target="#contractModal">
+            <i class="fa fa-plus"></i> New Contract</button>
+    </div>
+    <div id="loading">
+        <i class="fa fa-spinner fa-spin fa-4x"></i>
+    </div>
+    <div id="emptyMessage" class="row" style="display:none;">
+        <div class="alert alert-info">No contracts created yet. Let's create one!</div>
+    </div>
+    <div class="row">
+        <table id="contractTable" class="table" style="display:none;">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Client</th>
+                    <th>Status</th>
+                    <th>Versions</th>
+                    <th>Approvers</th>
+                    <th class="no-sort"></th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Contract modal -->
+<div class="modal fade" id="contractModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document" style="width: 80% !important;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="contractModalLabel">New Contract</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="contractId" value="" />
+                <div class="form-group">
+                    <label class="control-label" for="contractName">Contract Name</label>
+                    <input type="text" class="form-control" id="contractName" placeholder="Contract name" />
+                </div>
+                <div class="form-group">
+                    <label class="control-label" for="contractClient">Client Name</label>
+                    <input type="text" class="form-control" id="contractClient" placeholder="Client name" />
+                </div>
+                <div class="form-group">
+                    <label class="control-label" for="contractStatus">Status</label>
+                    <select class="form-control" id="contractStatus">
+                        <option value="draft">Draft</option>
+                        <option value="active">Active</option>
+                        <option value="archived">Archived</option>
+                    </select>
+                </div>
+                <hr />
+                <h5>Approvers</h5>
+                <table class="table table-condensed" id="approverTable">
+                    <thead><tr><th>Name</th><th>Email</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+                <div class="form-inline">
+                    <input type="text" class="form-control" id="newApproverName" placeholder="Name" />
+                    <input type="email" class="form-control" id="newApproverEmail" placeholder="Email" />
+                    <button type="button" class="btn btn-default" onclick="addApprover()"><i class="fa fa-plus"></i> Add Approver</button>
+                </div>
+                <hr />
+                <h5>Versions</h5>
+                <table class="table table-condensed" id="versionTable">
+                    <thead><tr><th>#</th><th>File</th><th>Scope</th><th>Uploaded</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+                <div class="form-group">
+                    <label class="control-label">Upload New Version</label>
+                    <input type="file" id="versionFile" />
+                    <textarea class="form-control" id="versionScope" placeholder="Scope description for this version" rows="3" style="margin-top:8px;"></textarea>
+                    <button type="button" class="btn btn-default" style="margin-top:8px;" onclick="uploadVersion()"><i class="fa fa-upload"></i> Upload Version</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="modalSubmit" onclick="save()">Save changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}} {{define "scripts"}}
+<script src="/js/dist/app/contracts.min.js"></script>
+{{end}}

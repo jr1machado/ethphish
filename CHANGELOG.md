@@ -6,6 +6,55 @@ was forked from. EthPhish entries are documented separately in
 
 ---
 
+## EthPhish [0.4.0] - 2026-08-06
+
+Contract-gated campaign approval workflow, expanded participant profiles,
+and EthPhish visual identity. Full detail in [RELEASE_NOTES.md](RELEASE_NOTES.md).
+
+### Added
+- Contract lifecycle: create/edit contracts, upload versioned scope
+  documents, and manage named approvers per contract (`models/contract.go`,
+  `controllers/api/contract.go`, `templates/contracts.html`).
+- Approval workflow: magic-link approval requests bound to an exact
+  contract version, single-use SHA-256-hashed tokens, expiration,
+  reminder/expiration cron, comment thread, and exportable JSON evidence
+  (`models/approval.go`, `controllers/api/approval.go`, "Approval Center").
+- Client approval portal on the public phishing server (`/approvals/*`,
+  port 9443): e-mail-verified magic-link login, its own session cookie and
+  CSRF protection, approve/reject/request-changes actions — no admin
+  credentials or shared login involved.
+- Campaigns can optionally link to a contract; creation *and* send-time
+  (worker) both re-check `IsCampaignApproved`, so a campaign already queued
+  is skipped, not just blocked at creation, if its approval goes stale.
+- Participant profile fields (department, company, city, state, country,
+  unit, tags) on groups/targets, with matching CSV column recognition,
+  client-side XLSX import (vendored SheetJS), validation/preview, and
+  dynamic filters on the Groups page.
+- EthPhish visual identity: dedicated logo assets and dark/light theme
+  stylesheets, replacing the inherited Anglerphish/Gophish theme selector.
+- `ETHPHISH_PHISH_CSRF_KEY` and `ETHPHISH_APPROVAL_PORTAL_BASE_URL` config
+  (also settable via `config.json`), and `ETHPHISH_ADMIN_*` TLS listeners on
+  9443/9444 now support on-demand certificate issuance for external access.
+
+### Fixed
+- User creation requires an explicit tenant scope; the previous unscoped
+  fallback could create a user outside `TenantScope` enforcement.
+- Contracts list endpoint (`GetContractsForTenant`) now preloads versions
+  and approvers — previously the admin UI's contract modal always showed
+  empty version/approver tables and never rendered the "Request Approval"
+  button, because the listing it reused for the edit view carried none of
+  that data (only the single-contract endpoint did).
+- Issuing or resending an approval now reports how many approvers were
+  actually e-mailed (`approvers_notified`/`approvers_total`) instead of
+  always flashing success, which was misleading when no sending profile
+  was configured for the tenant.
+- Manually resending an approval reminder now stamps
+  `last_reminder_sent_at`, matching the automatic reminder cron — the
+  Approval Center's "Last Reminder" column previously never updated after
+  a manual resend.
+
+---
+
 ## EthPhish [0.3.0] - 2026-08-06
 
 Multitenant foundation and delivery reliability. Full detail in

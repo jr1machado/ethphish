@@ -34,6 +34,7 @@ import (
 
 	"gopkg.in/alecthomas/kingpin.v2"
 
+	"github.com/gophish/gophish/approvals"
 	"github.com/gophish/gophish/config"
 	"github.com/gophish/gophish/controllers"
 	"github.com/gophish/gophish/crypto"
@@ -281,6 +282,7 @@ func main() {
 	if *mode == "admin" || *mode == "all" {
 		go adminServer.Start()
 		go imapMonitor.Start()
+		go approvals.StartScheduler(conf.ApprovalPortalBaseURL)
 	}
 	if *mode == "phish" || *mode == "all" {
 		go phishServer.Start()

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Approvals - EthPhish</title>
+    <style>
+        body { font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; background: #f4f6f8; color: #1c222b; margin: 0; }
+        .wrap { max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        .hero { background: linear-gradient(135deg, #1e3a5f 0%, #17998a 100%); border-radius: 10px; padding: 25px 30px; color: #fff; margin-bottom: 25px; }
+        .hero h1 { margin: 0 0 6px 0; font-size: 24px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+        th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #e2e5e9; }
+        th { background: #f4f6f8; font-size: 13px; text-transform: uppercase; color: #5b6470; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; color: #fff; }
+        .badge-pending { background: #f0ad4e; }
+        a.btn { display: inline-block; padding: 6px 14px; background: #1e3a5f; color: #fff; border-radius: 4px; text-decoration: none; }
+        .empty { color: #5b6470; text-align: center; padding: 40px 0; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="hero">
+            <h1>Your Pending Approvals</h1>
+            <p>Review and respond to contract approvals requested by EthPhish.</p>
+        </div>
+        {{if .Approvals}}
+        <table>
+            <thead>
+                <tr><th>Contract</th><th>Client</th><th>Version</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+                {{range .Approvals}}
+                <tr>
+                    <td>{{.ContractName}}</td>
+                    <td>{{.ClientName}}</td>
+                    <td>#{{.VersionNumber}}</td>
+                    <td><span class="badge badge-pending">{{.Status}}</span></td>
+                    <td><a class="btn" href="/approvals/{{.Id}}">Review</a></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="empty">No approvals are waiting on you right now.</div>
+        {{end}}
+    </div>
+</body>
+
+</html>

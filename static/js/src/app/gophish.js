@@ -160,6 +160,60 @@ var api = {
             return query("/groups/" + id + "/lock", "PUT", {}, false)
         }
     },
+    // contracts contains the endpoints for /contracts
+    contracts: {
+        get: function () {
+            return query("/contracts/", "GET", {}, false)
+        },
+        post: function (contract) {
+            return query("/contracts/", "POST", contract, false)
+        }
+    },
+    // contractId contains the endpoints for /contracts/:id
+    contractId: {
+        get: function (id) {
+            return query("/contracts/" + id, "GET", {}, false)
+        },
+        put: function (contract) {
+            return query("/contracts/" + contract.id, "PUT", contract, false)
+        },
+        delete: function (id) {
+            return query("/contracts/" + id, "DELETE", {}, false)
+        },
+        versions: function (id) {
+            return query("/contracts/" + id + "/versions", "GET", {}, false)
+        },
+        approvers: function (id) {
+            return query("/contracts/" + id + "/approvers", "GET", {}, false)
+        },
+        addApprover: function (id, approver) {
+            return query("/contracts/" + id + "/approvers", "POST", approver, false)
+        },
+        deleteApprover: function (id, approverId) {
+            return query("/contracts/" + id + "/approvers/" + approverId, "DELETE", {}, false)
+        }
+    },
+    // approvals contains the endpoints for /approvals
+    approvals: {
+        get: function () {
+            return query("/approvals/", "GET", {}, false)
+        },
+        issue: function (req) {
+            return query("/approvals/", "POST", req, false)
+        }
+    },
+    // approvalId contains the endpoints for /approvals/:id
+    approvalId: {
+        get: function (id) {
+            return query("/approvals/" + id, "GET", {}, false)
+        },
+        resend: function (id) {
+            return query("/approvals/" + id + "/resend", "POST", {}, false)
+        },
+        comment: function (id, body) {
+            return query("/approvals/" + id + "/comments", "POST", { body: body }, false)
+        }
+    },
     // templates contains the endpoints for /templates
     templates: {
         // get() - Queries the API for GET /templates
