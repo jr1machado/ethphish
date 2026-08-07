@@ -7,55 +7,53 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="EthPhish - Ethical Phishing and Quishing Testing Platform">
-    <meta name="author" content="Jordan Wright (http://github.com/jordan-wright)">
     <link rel="shortcut icon" href="/images/favicon.ico">
-
     <title>EthPhish - {{ .Title }}</title>
-
-    <link href="/css/dist/gophish.css" rel="stylesheet">
-    <link href='https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,300,600,700' rel='stylesheet' type='text/css'>
+    <link href="/css/ethphish-auth.css" rel="stylesheet">
 </head>
 
 <body>
-    <div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
-        <div class="container-fluid">
-            <div class="navbar-header">
-                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
-                    <span class="sr-only">Toggle navigation</span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                </button>
-                <img class="navbar-logo" src="/images/ethphish-logo.png" />
-                <a class="navbar-brand" href="/">&nbsp;&nbsp;EthPhish</a>
+    <div class="auth-shell">
+        <div class="auth-brand">
+            <div class="auth-scanline"></div>
+            <div class="auth-brand-top">
+                <img src="/images/ethphish-logo.png" alt="EthPhish">
+                <span class="auth-wordmark">EthPhish</span>
             </div>
-            <div class="navbar-collapse collapse">
-                <ul class="nav navbar-nav navbar-right">
-                    <li>
-                        <a id="login-button" href="/login">
-                            <button type="button" class="btn btn-primary">Login</button>
-                        </a>
-                    </li>
-                </ul>
+            <div class="auth-brand-mid">
+                <p class="auth-eyebrow">Admin Console</p>
+                <h1 class="auth-headline">Authorized access to the operations console.</h1>
+                <p class="auth-sub">Manage campaigns, contracts, approvals and training for your ethical phishing &amp; quishing program. Every session is scoped, logged and restricted to authorized personnel.</p>
+            </div>
+            <div class="auth-brand-bottom">
+                <span>ETHICAL PHISHING &amp; QUISHING PLATFORM</span>
+                <span>ACCESS RESTRICTED</span>
+            </div>
+        </div>
+        <div class="auth-form-wrap">
+            <div class="auth-card">
+                <p class="auth-card-eyebrow">// Sign in</p>
+                <h1>Admin login</h1>
+                {{template "flashes" .Flashes}}
+                <form action="" method="POST">
+                    <div class="auth-field">
+                        <label for="username">Username</label>
+                        <input type="text" name="username" id="username" class="auth-input" placeholder="admin" required autofocus>
+                    </div>
+                    <div class="auth-field">
+                        <label for="password">Password</label>
+                        <input type="password" name="password" id="password" class="auth-input" placeholder="••••••••" autocomplete="off" required>
+                    </div>
+                    <input type="hidden" name="csrf_token" value="{{.Token}}" />
+                    <button class="auth-btn" type="submit">Sign in</button>
+                    {{if .OIDCEnabled}}
+                    <div class="auth-divider">or</div>
+                    <a href="/auth/oidc/login" class="auth-btn-ghost">Sign in with SSO</a>
+                    {{end}}
+                </form>
             </div>
         </div>
     </div>
-    <div class="container">
-        <form class="form-signin" action="" method="POST">
-            <img id="logo" src="/images/ethphish-logo-large.png" />
-            <h2 class="form-signin-heading">Please sign in</h2>
-            {{template "flashes" .Flashes}}
-            <input type="text" name="username" class="form-control top-input" placeholder="Username" required autofocus>
-            <input type="password" name="password" class="form-control bottom-input" placeholder="Password" autocomplete="off" required>
-            <input type="hidden" name="csrf_token" value="{{.Token}}" />
-            <button class="btn btn-lg btn-primary btn-block" type="submit">Sign in</button>
-            {{if .OIDCEnabled}}
-            <p class="text-center" style="margin: 15px 0;">or</p>
-            <a href="/auth/oidc/login" class="btn btn-lg btn-default btn-block">Sign in with SSO</a>
-            {{end}}
-        </form>
-    </div>
-    <!-- Placed at the end of the document so the pages load faster -->
     <script src="/js/dist/vendor.min.js"></script>
 </body>
 

@@ -6,6 +6,31 @@ was forked from. EthPhish entries are documented separately in
 
 ---
 
+## EthPhish [0.6.0] - 2026-08-07
+
+Unified authentication surface redesign: admin login, contract-approver
+portal error page, and client-portal self-service login now share one
+design system. Presentation-only change — no route, session, CSRF, or auth
+logic touched. Full detail in [RELEASE_NOTES.md](RELEASE_NOTES.md).
+
+### Added
+- `static/css/ethphish-auth.css`: shared design system for every
+  unauthenticated entry point — two-column layout (brand panel + form
+  card), CSS custom properties (`--auth-*`), Space Grotesk/JetBrains
+  Mono/Source Sans Pro typography, responsive collapse below 860px.
+
+### Changed
+- `templates/login.html` (admin console), `templates/client_login.html`
+  (approval-link error page), `templates/portal_login.html` (client
+  self-service login) rebuilt on the new `auth-shell`/`auth-brand`/
+  `auth-form-wrap`/`auth-card` structure, each with a screen-specific
+  headline and context copy.
+- Removed the per-template inline `<style>` blocks in `client_login.html`
+  and `portal_login.html`, and the admin login page's dependency on the
+  legacy Bootstrap `navbar`/`form-signin` markup.
+
+---
+
 ## EthPhish [0.5.0] - 2026-08-06
 
 Client portal expanded into an ongoing dashboard, plus a full training and

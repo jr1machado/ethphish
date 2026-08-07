@@ -1,9 +1,11 @@
-# Issues conhecidos — EthPhish v0.5.0
+# Issues conhecidos — EthPhish v0.6.0
 
 ## Limitações técnicas
 
 | Item | Impacto | Mitigação/planejamento |
 | --- | --- | --- |
+| **Fontes de autenticação carregadas de CDN externo (Google Fonts)** (novo na v0.6.0) | `static/css/ethphish-auth.css` importa Space Grotesk/JetBrains Mono/Source Sans Pro de `fonts.googleapis.com`; sem saída de rede para esse domínio (rede administrativa isolada, air-gap) as três telas de login caem para a fonte de fallback do SO, sem quebrar funcionalmente | vendorizar as fontes localmente (mesmo padrão já usado pra SheetJS) em release futura, se a operação exigir ambiente sem saída de internet |
+| **Redesenho de autenticação não cobre `reset_password.html`** (novo na v0.6.0) | tela de troca de senha do admin ainda usa o Bootstrap/`form-signin` herdado, com visual inconsistente em relação às três telas já migradas | estender `ethphish-auth.css` a essa tela em release futura — decisão de corte, não limitação técnica |
 | **Sem certificado de conclusão de treinamento** | assignments/quiz_attempts gravam nota e aprovação, mas não há PDF/documento emitido ao concluir | gerar certificado (reaproveitar o gerador de relatórios Word/Excel já existente) em release futura |
 | **Sem dashboard de indicadores de treinamento** | taxa de início/conclusão, nota média, evolução entre tentativas, departamentos com menor adesão, reincidência pós-treinamento e impacto nas campanhas seguintes (Sprint08 §14.4) não têm tela — os dados brutos já existem em `training_assignments`/`quiz_attempts`/`training_lesson_views` | construir a camada de agregação e visualização em cima do que já é gravado |
 | **Treinamento não aparece no portal do cliente** | `/portal/*` (Sprint 7.5) reserva o conceito na navegação mas não lista treinamentos do tenant nem progresso agregado | wiring simples, dado já existe; adiar foi decisão de escopo, não limitação técnica |

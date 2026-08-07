@@ -5,25 +5,37 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EthPhish Approval Portal</title>
-    <style>
-        body { font-family: 'Source Sans Pro', Helvetica, Arial, sans-serif; background: #f4f6f8; color: #1c222b; margin: 0; }
-        .wrap { max-width: 480px; margin: 80px auto; padding: 0 20px; }
-        .card { background: linear-gradient(135deg, #1e3a5f 0%, #17998a 100%); border-radius: 10px; padding: 30px 35px; color: #fff; text-align: center; box-shadow: 0 4px 18px rgba(0,0,0,.18); }
-        .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.85); }
-        h1 { margin: 10px 0; font-size: 26px; }
-        p { line-height: 1.5; }
-        .hint { text-align: center; color: #5b6470; margin-top: 20px; }
-    </style>
+    <link href="/css/ethphish-auth.css" rel="stylesheet">
 </head>
 
 <body>
-    <div class="wrap">
-        <div class="card">
-            <span class="eyebrow">EthPhish Approval Portal</span>
-            <h1>Link invalid or expired</h1>
-            <p>{{.Message}}</p>
+    <div class="auth-shell">
+        <div class="auth-brand">
+            <div class="auth-scanline"></div>
+            <div class="auth-brand-top">
+                <img src="/images/ethphish-logo.png" alt="EthPhish">
+                <span class="auth-wordmark">EthPhish</span>
+            </div>
+            <div class="auth-brand-mid">
+                <p class="auth-eyebrow">Approval Portal</p>
+                <h1 class="auth-headline">Client sign-off, tied to an exact scope.</h1>
+                <p class="auth-sub">This portal identifies you by the single-use link sent to your verified e-mail — no separate account or password. Every decision is timestamped and bound to the contract version reviewed.</p>
+            </div>
+            <div class="auth-brand-bottom">
+                <span>ETHICAL PHISHING &amp; QUISHING PLATFORM</span>
+                <span>LINK-VERIFIED ACCESS</span>
+            </div>
         </div>
-        <p class="hint">Ask your EthPhish contact to resend your approval request.</p>
+        <div class="auth-form-wrap">
+            <div class="auth-card">
+                <p class="auth-card-eyebrow">// Access</p>
+                <h1>Link invalid</h1>
+                <div class="auth-message-card">
+                    <p>{{.Message}}</p>
+                </div>
+                <p class="auth-hint">Ask your EthPhish contact to resend your approval request.</p>
+            </div>
+        </div>
     </div>
 </body>
 

@@ -1,0 +1,286 @@
+/*
+ * EthPhish auth surface — shared design system for every unauthenticated
+ * entry point (admin login, approval portal, client portal). "Operations
+ * console" aesthetic: dark, monospace-accented, scan-line motion — reads
+ * as a security tool, not a generic SaaS login.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500;600&family=Source+Sans+Pro:wght@400;600&display=swap');
+
+:root {
+    --auth-bg: #05070c;
+    --auth-panel: #0a0f18;
+    --auth-card: #0d141f;
+    --auth-border: rgba(45, 212, 191, 0.16);
+    --auth-border-bright: rgba(45, 212, 191, 0.4);
+    --auth-accent: #17998a;
+    --auth-accent-bright: #2fe0c8;
+    --auth-text: #e8ecf2;
+    --auth-text-dim: #7d8aa0;
+    --auth-danger: #ff5f78;
+    --auth-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
+    --auth-display: 'Space Grotesk', 'Source Sans Pro', sans-serif;
+    --auth-body: 'Source Sans Pro', -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--auth-bg);
+    font-family: var(--auth-body);
+    color: var(--auth-text);
+}
+
+.auth-shell {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+}
+
+@media (max-width: 860px) {
+    .auth-shell { grid-template-columns: 1fr; }
+    .auth-brand { min-height: 260px; }
+}
+
+/* Left: brand panel with grid + scan-line */
+.auth-brand {
+    position: relative;
+    background:
+        radial-gradient(circle at 15% 20%, rgba(23, 153, 138, 0.16), transparent 45%),
+        linear-gradient(160deg, var(--auth-panel) 0%, #060a12 100%);
+    overflow: hidden;
+    padding: 56px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.auth-brand::before {
+    /* dot grid */
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(45, 212, 191, 0.14) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse 70% 70% at 30% 30%, black 40%, transparent 85%);
+    pointer-events: none;
+}
+
+.auth-scanline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--auth-accent-bright), transparent);
+    box-shadow: 0 0 18px 2px rgba(47, 224, 200, 0.55);
+    animation: auth-scan 6s ease-in-out infinite;
+    opacity: 0.75;
+}
+
+@keyframes auth-scan {
+    0%   { top: 6%; opacity: 0; }
+    8%   { opacity: 0.8; }
+    50%  { top: 92%; opacity: 0.5; }
+    92%  { opacity: 0.8; }
+    100% { top: 6%; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-scanline { animation: none; top: 50%; }
+}
+
+.auth-brand-top { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; }
+.auth-brand-top img { height: 34px; width: auto; filter: drop-shadow(0 0 12px rgba(47, 224, 200, 0.35)); }
+.auth-wordmark { font-family: var(--auth-display); font-weight: 700; font-size: 20px; letter-spacing: 0.01em; color: var(--auth-text); }
+
+.auth-brand-mid { position: relative; z-index: 1; max-width: 480px; }
+.auth-eyebrow {
+    font-family: var(--auth-mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--auth-accent-bright);
+    margin: 0 0 18px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.auth-eyebrow::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--auth-accent-bright);
+    box-shadow: 0 0 8px 2px rgba(47, 224, 200, 0.7);
+}
+.auth-headline {
+    font-family: var(--auth-display);
+    font-weight: 700;
+    font-size: clamp(28px, 4vw, 42px);
+    line-height: 1.12;
+    margin: 0 0 16px 0;
+    color: #fff;
+}
+.auth-sub {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--auth-text-dim);
+    margin: 0;
+}
+
+.auth-brand-bottom {
+    position: relative;
+    z-index: 1;
+    font-family: var(--auth-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--auth-text-dim);
+    border-top: 1px solid var(--auth-border);
+    padding-top: 16px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.auth-brand-bottom span { white-space: nowrap; }
+
+/* Right: form panel */
+.auth-form-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 40px;
+    background: var(--auth-bg);
+}
+.auth-card { width: 100%; max-width: 380px; }
+.auth-card-eyebrow {
+    font-family: var(--auth-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--auth-text-dim);
+    margin: 0 0 8px 0;
+}
+.auth-card h1 {
+    font-family: var(--auth-display);
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0 0 28px 0;
+    color: var(--auth-text);
+}
+
+.auth-field { margin-bottom: 20px; }
+.auth-field label {
+    display: block;
+    font-family: var(--auth-mono);
+    font-size: 12px;
+    color: var(--auth-accent-bright);
+    margin-bottom: 7px;
+}
+.auth-field label::before { content: '> '; opacity: 0.7; }
+
+.auth-input,
+input.auth-input {
+    width: 100%;
+    background: var(--auth-card);
+    border: 1px solid var(--auth-border);
+    border-radius: 6px;
+    padding: 13px 14px;
+    font-family: var(--auth-body);
+    font-size: 15px;
+    color: var(--auth-text);
+    outline: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.auth-input::placeholder { color: #4b5568; }
+.auth-input:focus {
+    border-color: var(--auth-accent-bright);
+    box-shadow: 0 0 0 3px rgba(47, 224, 200, 0.15);
+}
+
+.auth-btn {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 6px;
+    border: none;
+    background: linear-gradient(135deg, var(--auth-accent) 0%, var(--auth-accent-bright) 140%);
+    color: #041712;
+    font-family: var(--auth-body);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease;
+}
+.auth-btn:hover { box-shadow: 0 6px 24px -6px rgba(47, 224, 200, 0.55); transform: translateY(-1px); }
+.auth-btn:active { transform: translateY(0); }
+
+.auth-btn-ghost {
+    width: 100%;
+    padding: 13px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--auth-border);
+    background: transparent;
+    color: var(--auth-text);
+    font-family: var(--auth-body);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    text-decoration: none;
+    display: block;
+    text-align: center;
+    transition: border-color .15s ease, background .15s ease;
+}
+.auth-btn-ghost:hover { border-color: var(--auth-border-bright); background: rgba(45, 212, 191, 0.06); color: var(--auth-text); text-decoration: none; }
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    color: var(--auth-text-dim);
+    font-family: var(--auth-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--auth-border); }
+
+.auth-flash {
+    font-family: var(--auth-mono);
+    font-size: 13px;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 20px;
+    border: 1px solid;
+}
+.auth-flash-error { background: rgba(255, 95, 120, 0.08); border-color: rgba(255, 95, 120, 0.35); color: var(--auth-danger); }
+.auth-flash-info { background: rgba(45, 212, 191, 0.08); border-color: var(--auth-border-bright); color: var(--auth-accent-bright); }
+
+.auth-message-card {
+    background: var(--auth-card);
+    border: 1px solid var(--auth-border);
+    border-radius: 10px;
+    padding: 28px 26px;
+}
+.auth-message-card p { color: var(--auth-text-dim); line-height: 1.6; margin: 0; }
+
+.auth-hint { margin-top: 18px; font-size: 13px; color: var(--auth-text-dim); text-align: center; }
+.auth-hint a { color: var(--auth-accent-bright); }
+
+/* Re-skin the shared {{template "flashes"}} .alert markup so it doesn't
+   read as a stray bootstrap-blue box on the dark auth surface. */
+.auth-form-wrap .alert {
+    font-family: var(--auth-mono);
+    font-size: 13px;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 20px;
+    border: 1px solid var(--auth-border-bright);
+    background: rgba(45, 212, 191, 0.08);
+    color: var(--auth-accent-bright);
+}
+.auth-form-wrap .alert-danger { border-color: rgba(255, 95, 120, 0.35); background: rgba(255, 95, 120, 0.08); color: var(--auth-danger); }
+.auth-form-wrap .alert i { margin-right: 6px; }
