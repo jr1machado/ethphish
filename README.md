@@ -1,4 +1,4 @@
-# EthPhish v0.5.0
+# EthPhish v0.6.0
 
 EthPhish é um **fork independente** do Anglerphish 1.3.0 (que por sua vez
 deriva do Gophish), evoluído como uma **plataforma corporativa completa e
@@ -157,7 +157,17 @@ Desde a base Anglerphish 1.3.0:
   (múltipla escolha + verdadeiro/falso) com nota mínima e limite de
   tentativas configuráveis, entregue por atribuição direta a um grupo
   (e-mail automático) ou por redirecionamento automático pós-clique/submit
-  de uma campanha ("teachable moment"), configurável no wizard de campanha.
+  de uma campanha ("teachable moment"), configurável no wizard de campanha;
+- **redesenho da superfície de autenticação** (v0.6.0): as três telas
+  públicas de login (`/login` admin, `/approvals/*` aprovador de contrato,
+  `/portal/*` cliente) passam a compartilhar um único design system
+  (`static/css/ethphish-auth.css`) — layout em duas colunas com painel de
+  marca (logo, headline contextual por tela, scan-line animado) e cartão de
+  formulário em estética "console de operações" (escura, monoespaçada),
+  substituindo o Bootstrap genérico herdado do Gophish/Anglerphish na tela
+  de admin e o CSS inline duplicado nas telas de aprovação/portal; sem
+  mudança de rota, sessão, CSRF ou lógica de autenticação — puramente
+  apresentação.
 
 ## Arquitetura
 
@@ -244,7 +254,7 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
   CPU e memória por node devem ser monitorados para decidir quando adicionar
   o próximo node.
 
-## Recursos implementados até a v0.5.0
+## Recursos implementados até a v0.6.0
 
 **Herdados do baseline Anglerphish 1.3.0** (ver detalhamento completo em
 [FEATURES.md](FEATURES.md)):
@@ -338,6 +348,27 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
   limitado — afetava também `GetCampaignSummariesForTenant`, já em
   produção desde a v0.4.0.
 
+**Entregues na v0.6.0 (EthPhish)**:
+
+- **design system de autenticação único** (`static/css/ethphish-auth.css`,
+  286 linhas): variáveis de tema (`--auth-*`), tipografia própria (Space
+  Grotesk para display, JetBrains Mono para elementos técnicos, Source Sans
+  Pro para corpo de texto), grid responsivo de duas colunas que colapsa em
+  uma coluna abaixo de 860px;
+- `templates/login.html` (admin), `templates/client_login.html` (erro de
+  link de aprovação) e `templates/portal_login.html` (login self-service do
+  cliente) migrados para o novo shell (`auth-shell`/`auth-brand`/
+  `auth-form-wrap`/`auth-card`), cada um com headline e mensagem de contexto
+  específicos da própria tela;
+- remoção do CSS inline duplicado que existia em `client_login.html` e
+  `portal_login.html` (estilo `<style>` embutido por template) e da
+  dependência do layout de admin em `navbar`/`form-signin` do Bootstrap
+  herdado;
+- sem alteração de backend: rotas, handlers, geração/validação de
+  `csrf_token`, sessão (`ethphish_client`) e fluxo de SSO/OIDC no login
+  admin permanecem exatamente os mesmos — mudança é só de apresentação
+  (HTML/CSS).
+
 ## Funções e recursos futuros
 
 - workers externos ao processo do servidor, distribuídos em nodes próprios,
@@ -373,7 +404,12 @@ Consulte o detalhamento em [arquitetura alvo](docs/architecture/target-architect
   importação/exportação controlada;
 - backup automatizado, retenção, restauração recorrente e storage externo;
 - alta disponibilidade, assinatura de imagens e política formal de
-  atualização de dependências.
+  atualização de dependências;
+- estender o design system `ethphish-auth.css` (v0.6.0) a
+  `templates/reset_password.html`, que ainda usa o Bootstrap/`form-signin`
+  herdado — fora do escopo desta release por não ser uma tela pública
+  visitada por terceiros (cliente/aprovador), diferente das três já
+  migradas.
 
 ## Fora de escopo
 
@@ -483,7 +519,7 @@ Consulte [desenvolvimento local](docs/runbooks/local-development.md),
 - [Design: portal do cliente](docs/superpowers/specs/2026-08-06-client-portal-dashboard-design.md)
 - [Design: treinamento e quiz](docs/superpowers/specs/2026-08-06-training-quiz-design.md)
 - [Funções e recursos herdados detalhados](FEATURES.md)
-- [Release notes v0.5.0](RELEASE_NOTES.md)
+- [Release notes v0.6.0](RELEASE_NOTES.md)
 - [Issues conhecidos](ISSUES_CONHECIDOS.md)
 
 ## Licença e atribuição
